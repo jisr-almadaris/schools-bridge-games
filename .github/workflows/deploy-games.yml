@@ -1,5 +1,5 @@
-name: Deploy Bridge Games
-on: push: branches: [main] paths: - "game-comparisons/**" - ".github/workflows/deploy-games.yml" workflow_dispatch:
+ name: Deploy Bridge Games
+on: push: branches: - main paths: - "game-comparisons/**" - ".github/workflows/deploy-games.yml" workflow_dispatch:
 permissions: contents: read pages: write id-token: write
 concurrency: group: github-pages cancel-in-progress: false
 jobs: deploy: runs-on: ubuntu-latest environment: name: github-pages url: ${{ steps.deployment.outputs.page_url }}
