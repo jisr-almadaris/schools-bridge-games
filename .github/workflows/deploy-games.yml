@@ -1,0 +1,37 @@
+name: Deploy Bridge Games
+on: push: branches: [main] paths: - "game-comparisons/**" - ".github/workflows/deploy-games.yml" workflow_dispatch:
+permissions: contents: read pages: write id-token: write
+concurrency: group: github-pages cancel-in-progress: false
+jobs: deploy: runs-on: ubuntu-latest environment: name: github-pages url: ${{ steps.deployment.outputs.page_url }}
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Setup Node
+    uses: actions/setup-node@v4
+    with:
+      node-version: "20"
+      cache: npm
+      cache-dependency-path: game-comparisons/package-lock.json
+
+  - name: Install dependencies
+    working-directory: game-comparisons
+    run: npm ci
+
+  - name: Build comparisons game
+    working-directory: game-comparisons
+    run: npm run build -- --base=/schools-bridge-games/game-comparisons/
+
+  - name: Prepare Pages files
+    run: |
+      mkdir -p _site/game-comparisons
+      cp -R game-comparisons/dist/. _site/game-comparisons/
+
+  - name: Upload Pages artifact
+    uses: actions/upload-pages-artifact@v3
+    with:
+      path: _site
+
+  - name: Deploy to GitHub Pages
+    id: deployment
+    uses: actions/deploy-pages@v4
