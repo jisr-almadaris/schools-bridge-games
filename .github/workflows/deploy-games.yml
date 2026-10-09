@@ -1,9 +1,7 @@
 name: Deploy Bridge Games
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -20,37 +18,27 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: game-comarisons
-        run: npm install
-
-      - name: Build comparisons game
-        working-directory: game-comarisons
-        run: npm run build -- --base=/schools-bridge-games/game-comarisons/
-
-      - name: Prepare Pages files
+          node-version: '22'
+      - name: Build all games
+        shell: bash
         run: |
-          mkdir -p _site/game-comarisons
-          cp -R game-comarisons/dist/. _site/game-comarisons/
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+          set -euo pipefail
+          mkdir -p _site
+          for dir in game-*; do
+            if [[ ! -f "$dir/package.json" ]]; then continue; fi
+            (cd "$dir" && npm ci --no-audit --no-fund && npm run build -- --base="/schools-bridge-games/$dir/")
+            test -f "$dir/dist/index.html"
+            mkdir -p "_site/$dir"
+            cp -R "$dir/dist/." "_site/$dir/"
+          done
+          test -f _site/game-comarisons/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
-      - name: Deploy Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
