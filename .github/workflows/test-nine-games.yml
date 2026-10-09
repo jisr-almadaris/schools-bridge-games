@@ -1,0 +1,43 @@
+name: Verify ten games - no deployment
+
+on:
+  push:
+    branches:
+      - test-nine-games
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trial branch
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build ten games without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in \
+            game-comarisons \
+            game-conjunctions \
+            game-gerund-infinitive \
+            game-how-often \
+            game-past-simple \
+            game-possessives \
+            game-present-progressive \
+            game-present-simple \
+            game-subject-pronouns \
+            game-wh-questions; do
+            echo "::group::Checking $dir"
+            test -f "$dir/package.json"
+            (cd "$dir" && npm ci --no-audit --no-fund && npm run build -- --base="/schools-bridge-games/$dir/")
+            test -f "$dir/dist/index.html"
+            echo "OK: $dir"
+            echo "::endgroup::"
+          done
