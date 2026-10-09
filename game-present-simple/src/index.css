@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root { font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Noto Kufi Arabic", system-ui, sans-serif; }
+body { margin: 0; background: #1e1b4b; }
+
+/* Passport stamp */
+.stamp-mark {
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: .5px;
+  opacity: .85;
+  background: transparent;
+  mask-image: radial-gradient(circle at 30% 40%, #000 60%, transparent 62%), radial-gradient(#000 92%, transparent 100%);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Animations */
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.anim-bob { animation: bob 3s ease-in-out infinite; }
+
+@keyframes pop { 0% { transform: scale(.7); opacity: 0; } 70% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.anim-pop { animation: pop .45s cubic-bezier(.2,.9,.3,1.2) both; }
+
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.anim-shake { animation: shake .35s ease-in-out; }
+
+@keyframes stampIn { 0% { transform: scale(2.2) rotate(var(--r, -12deg)); opacity: 0; } 60% { transform: scale(.95); opacity: 1; } 100% { transform: scale(1); opacity: .85; } }
+.anim-stamp-in { animation: stampIn .35s ease-out both; }
+
+@keyframes cloud { from { transform: translateX(-20vw); } to { transform: translateX(110vw); } }
+.anim-cloud { animation: cloud 40s linear infinite; left: 0; }
+@keyframes cloudFast { from { transform: translateX(400%); } to { transform: translateX(-300%); } }
+.anim-cloud-fast { animation: cloudFast 9s linear infinite; }
+
+@keyframes plane { 0% { transform: translate(-10vw, 20px) rotate(-8deg); } 100% { transform: translate(110vw, -60px) rotate(-8deg); } }
+.anim-plane { animation: plane 22s linear infinite; left: 0; }
+
+@keyframes slideIn { from { transform: translateX(-60vw); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.anim-slide-in { animation: slideIn 2.2s ease-out both; }
+
+@keyframes walkAway { 0% { transform: translateX(0) scale(1); } 100% { transform: translateX(45vw) translateY(-10vh) scale(.55); opacity: .9; } }
+.anim-walk-away { animation: walkAway 4s ease-in-out both; }
+
+@keyframes walkAisle { 0% { transform: translateY(0) scale(1); } 100% { transform: translateY(-38vh) scale(.28); } }
+.anim-walk-aisle { animation: walkAisle 4.2s ease-in-out both; }
+
+@keyframes sit { 0% { transform: translateY(-40%); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+.anim-sit { animation: sit 1.1s ease-out both; }
+
+@keyframes rumble { 0%,100% { transform: translate(0,0); } 25% { transform: translate(1px,-1px); } 50% { transform: translate(-1px,1px); } 75% { transform: translate(1px,1px); } }
+.anim-rumble { animation: rumble .12s linear infinite; }
+
+@keyframes runway { from { background-position-y: 0; } to { background-position-y: 200px; } }
+.anim-runway { animation: runway .5s linear infinite; }
+
+@keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(251,191,36,.7); } 100% { box-shadow: 0 0 0 18px rgba(251,191,36,0); } }
+.anim-pulse-ring { animation: pulseRing 1.2s ease-out infinite; }
+
+/* Realistic ink stamp impression */
+.passport-page { background-image: radial-gradient(circle at 30% 30%, rgba(99,102,241,.06), transparent 60%), repeating-linear-gradient(135deg, transparent 0 8px, rgba(99,102,241,.05) 8px 9px); }
+.ink-stamp { display: inline-block; transform-origin: center; opacity: .9; filter: drop-shadow(0 0 0 transparent); }
+.ink-ring { border: 4px double currentColor; border-radius: 14px; padding: 3px; mix-blend-mode: multiply;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80'><filter id='n'><feTurbulence baseFrequency='.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 -1.2'/></filter><rect width='120' height='80' fill='black'/><rect width='120' height='80' filter='url(%23n)' opacity='.9'/></svg>");
+  -webkit-mask-size: 60px; mask-size: 60px; }
+.ink-inner { border: 2px solid currentColor; border-radius: 10px; padding: 4px 10px; text-align: center; font-weight: 900; text-transform: uppercase; white-space: nowrap; letter-spacing: .5px; }
+.ink-top { font-size: 9px; letter-spacing: 3px; }
+.ink-main { font-size: 15px; line-height: 1.1; }
+.ink-sub { font-size: 9px; letter-spacing: 2px; }
+.ink-date { font-size: 9px; font-family: monospace; margin-top: 2px; }
+
+@keyframes stampFade { 0%,60% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
+.anim-stamp-fade { animation: stampFade 1.2s ease-out .25s both; }
+@keyframes inkSplash { 0% { box-shadow: inset 0 0 0 0 rgba(190,18,60,0); } 30% { box-shadow: inset 0 0 40px 10px rgba(190,18,60,.25); } 100% { box-shadow: inset 0 0 0 0 rgba(190,18,60,0); } }
+.anim-ink-splash { animation: inkSplash .7s ease-out both; border-radius: 16px; }
+@keyframes openPassport { from { transform: perspective(600px) rotateY(-70deg); opacity: 0; } to { transform: perspective(600px) rotateY(0); opacity: 1; } }
+.anim-open-passport { animation: openPassport .8s ease-out both; transform-origin: left center; }
+
+/* Living airport */
+@keyframes taxi { from { transform: translateX(-15vw); } to { transform: translateX(115vw); } }
+.anim-taxi { animation: taxi 60s linear infinite; left: 0; }
+@keyframes walker { from { transform: translateX(-10vw); } to { transform: translateX(110vw); } }
+.anim-walker { animation: walker 30s linear infinite; left: 0; }
+@keyframes walkerRev { from { transform: translateX(110vw) scaleX(-1); } to { transform: translateX(-10vw) scaleX(-1); } }
+.anim-walker-rev { animation: walkerRev 30s linear infinite; left: 0; }
+
+/* Scene transition: airport arrival wipe */
+@keyframes wipe { 0% { clip-path: circle(0% at 50% 50%); } 100% { clip-path: circle(150% at 50% 50%); } }
+.anim-wipe { animation: wipe 1.4s ease-out both; }
+@keyframes gateOpen { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.anim-gate-l { animation: gateOpen 1.2s ease-in-out both; transform-origin: left; }
+.anim-gate-r { animation: gateOpen 1.2s ease-in-out both; transform-origin: right; }
+@keyframes belt { from { background-position-x: 0; } to { background-position-x: 80px; } }
+.anim-belt { animation: belt 2s linear infinite; }
+
+/* Print: certificate only */
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden; }
+  #certificate, #certificate * { visibility: visible; }
+  #certificate { position: fixed; inset: 0; margin: 0; width: 100%; border-radius: 0; }
+}

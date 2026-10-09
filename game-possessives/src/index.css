@@ -1,0 +1,265 @@
+@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Fredoka:wght@500;600;700&display=swap");
+@import "tailwindcss";
+
+:root {
+  --font-ar: "Cairo", system-ui, sans-serif;
+  --font-en: "Fredoka", "Cairo", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ar);
+  background: #1a0e33;
+  color: #f6f2ff;
+  overflow-x: hidden;
+}
+
+.font-en {
+  font-family: var(--font-en);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------- Animations ---------- */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+.anim-float {
+  animation: floaty 3s ease-in-out infinite;
+}
+
+@keyframes bobwalk {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-9px) rotate(1.5deg);
+  }
+}
+.anim-walk {
+  animation: bobwalk 0.42s ease-in-out infinite;
+}
+
+@keyframes idlebreathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.01);
+  }
+}
+.anim-idle {
+  animation: idlebreathe 2.6s ease-in-out infinite;
+}
+
+@keyframes popin {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.anim-pop {
+  animation: popin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fadeUp {
+  from {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.anim-fadeup {
+  animation: fadeUp 0.55s ease both;
+}
+
+@keyframes sceneIn {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.anim-scene {
+  animation: sceneIn 0.7s ease both;
+}
+
+@keyframes shakeX {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(9px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
+  }
+}
+.anim-shake {
+  animation: shakeX 0.5s ease;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-150%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.anim-slidein {
+  animation: slideInLeft 1s ease both;
+}
+
+@keyframes slideToVault {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.anim-slide-vault {
+  animation: slideToVault 1.4s ease both;
+}
+
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 34px 10px rgba(45, 212, 191, 0.35);
+  }
+}
+.anim-glow {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes spinSlow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.anim-spin-slow {
+  animation: spinSlow 14s linear infinite;
+}
+
+@keyframes vaultOpen {
+  0% {
+    transform: perspective(900px) rotateY(0deg);
+  }
+  100% {
+    transform: perspective(900px) rotateY(-108deg);
+  }
+}
+.anim-vault-open {
+  transform-origin: left center;
+  animation: vaultOpen 1.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+@keyframes starFall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes rayspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+.anim-wiggle {
+  animation: wiggle 1.5s ease-in-out infinite;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+}
+
+/* ---------- Print (certificate only) ---------- */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #certificate,
+  #certificate * {
+    visibility: visible !important;
+  }
+  #certificate {
+    position: fixed !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
