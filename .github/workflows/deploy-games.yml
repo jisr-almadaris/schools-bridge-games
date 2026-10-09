@@ -31,17 +31,17 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: game-comparisons
+        working-directory: game-comarisons
         run: npm install
 
       - name: Build comparisons game
-        working-directory: game-comparisons
-        run: npm run build -- --base=/schools-bridge-games/game-comparisons/
+        working-directory: game-comarisons
+        run: npm run build -- --base=/schools-bridge-games/game-comarisons/
 
       - name: Prepare Pages files
         run: |
-          mkdir -p _site/game-comparisons
-          cp -R game-comparisons/dist/. _site/game-comparisons/
+          mkdir -p _site/game-comarisons
+          cp -R game-comarisons/dist/. _site/game-comarisons/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
