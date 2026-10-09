@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+@theme {
+  --font-ar: "Cairo", "Segoe UI", Tahoma, sans-serif;
+  --font-en: "Fredoka", "Nunito", "Segoe UI", sans-serif;
+  --color-lav-100: #ede7f6;
+  --color-lav-200: #d9ccf0;
+  --color-lav-300: #b9a4e6;
+  --color-lav-500: #7c5cc4;
+  --color-lav-700: #4b2f8f;
+  --color-night-700: #2a2760;
+  --color-night-900: #171644;
+  --color-gold-300: #ffe08a;
+  --color-gold-400: #f7c948;
+  --color-gold-600: #c9962b;
+  --color-teal-300: #7fe3d8;
+  --color-teal-500: #2fbfb0;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ar);
+  background: #171644;
+  color: #2a2760;
+  -webkit-font-smoothing: antialiased;
+}
+
+.en {
+  font-family: var(--font-en);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ===== Animations ===== */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-6px) rotate(1deg); }
+}
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.85) translateY(12px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+@keyframes spinBack {
+  to { transform: rotate(-360deg); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-2.5deg) scale(1.03); }
+  75% { transform: rotate(2.5deg) scale(1.03); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(247, 201, 72, 0.55), 0 10px 30px rgba(0,0,0,0.25); }
+  50% { box-shadow: 0 0 0 14px rgba(247, 201, 72, 0), 0 10px 30px rgba(0,0,0,0.25); }
+}
+@keyframes doorLeft {
+  to { transform: perspective(900px) rotateY(95deg); }
+}
+@keyframes doorRight {
+  to { transform: perspective(900px) rotateY(-95deg); }
+}
+@keyframes handBack {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-120deg); }
+}
+@keyframes handBackMin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-400deg); }
+}
+@keyframes confetti {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+@keyframes walkIn {
+  0% { transform: translateX(-40%) scale(0.9); opacity: 0; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes lightSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes flipIn {
+  0% { transform: rotateX(90deg); opacity: 0; }
+  100% { transform: rotateX(0); opacity: 1; }
+}
+
+.anim-floaty { animation: floaty 3.5s ease-in-out infinite; }
+.anim-bob { animation: bob 3s ease-in-out infinite; }
+.anim-pop { animation: popIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.anim-fade-up { animation: fadeUp 0.5s ease-out both; }
+.anim-twinkle { animation: twinkle 2.4s ease-in-out infinite; }
+.anim-spin-slow { animation: spinSlow 8s linear infinite; }
+.anim-spin-back { animation: spinBack 6s linear infinite; }
+.anim-wiggle { animation: wiggle 0.7s ease-in-out; }
+.anim-shake { animation: shake 0.4s ease-in-out; }
+.anim-glow { animation: glowPulse 2s ease-in-out infinite; }
+.anim-walk-in { animation: walkIn 1.2s ease-out both; }
+.anim-flip-in { animation: flipIn 0.5s ease-out both; }
+
+.delay-1 { animation-delay: 0.15s; }
+.delay-2 { animation-delay: 0.3s; }
+.delay-3 { animation-delay: 0.45s; }
+.delay-4 { animation-delay: 0.6s; }
+.delay-5 { animation-delay: 0.75s; }
+
+.door-left.open { animation: doorLeft 1.6s ease-in-out forwards; transform-origin: left center; }
+.door-right.open { animation: doorRight 1.6s ease-in-out forwards; transform-origin: right center; }
+
+.hand-hour.back { animation: handBack 2.2s ease-in-out forwards; }
+.hand-min.back { animation: handBackMin 2.2s ease-in-out forwards; }
+
+.confetti-piece {
+  position: fixed;
+  top: 0;
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  animation: confetti 3.2s linear forwards;
+  z-index: 60;
+}
+
+/* Gold frame */
+.gold-frame {
+  border: 10px solid;
+  border-image: linear-gradient(135deg, #f9e39a, #c9962b 35%, #ffe8a8 55%, #b8860b 80%, #f7d774) 1;
+  box-shadow: 0 12px 34px rgba(20, 15, 60, 0.45), inset 0 0 0 3px rgba(255, 244, 200, 0.7);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.museum-bg {
+  background-image: url("/schools-bridge-games/game-past-simple/images/museum-hall.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.character-mask {
+  -webkit-mask-image: radial-gradient(ellipse 62% 78% at 50% 50%, #000 62%, transparent 76%);
+  mask-image: radial-gradient(ellipse 62% 78% at 50% 50%, #000 62%, transparent 76%);
+}
+
+.word-card {
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.ed {
+  color: #e0457b;
+  font-weight: 800;
+}
+
+/* ===== Print: certificate only ===== */
+@page {
+  size: A4 landscape;
+  margin: 8mm;
+}
+@media print {
+  body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #certificate,
+  #certificate * {
+    visibility: visible;
+  }
+  #certificate {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
