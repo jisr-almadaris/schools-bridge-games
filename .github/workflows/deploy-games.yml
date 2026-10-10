@@ -35,6 +35,15 @@ jobs:
             mkdir -p "_site/$dir"
             cp -R "$dir/dist/." "_site/$dir/"
           done
+          # Publish the three static vocabulary games without rebuilding or changing older games.
+          for dir in vocab-pick-1 vocab-pick-2 vocab-spell-3; do
+            test -f "$dir/index.html"
+            mkdir -p "_site/$dir"
+            cp -R "$dir/." "_site/$dir/"
+          done
+          test -f _site/vocab-pick-1/index.html
+          test -f _site/vocab-pick-2/index.html
+          test -f _site/vocab-spell-3/index.html
           test -f _site/game-comarisons/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
