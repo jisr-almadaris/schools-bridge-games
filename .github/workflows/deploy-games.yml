@@ -28,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site
+          # Keep the existing games untouched.
           for dir in game-*; do
             if [[ ! -f "$dir/package.json" ]]; then continue; fi
             (cd "$dir" && npm ci --no-audit --no-fund && npm run build -- --base="/schools-bridge-games/$dir/")
@@ -35,7 +36,7 @@ jobs:
             mkdir -p "_site/$dir"
             cp -R "$dir/dist/." "_site/$dir/"
           done
-          # Publish the three static vocabulary games without rebuilding or changing older games.
+          # Keep all three vocabulary games and their existing designs.
           for dir in vocab-pick-1 vocab-pick-2 vocab-spell-3; do
             test -f "$dir/index.html"
             mkdir -p "_site/$dir"
@@ -45,6 +46,46 @@ jobs:
           test -f _site/vocab-pick-2/index.html
           test -f _site/vocab-spell-3/index.html
           test -f _site/game-comarisons/index.html
+
+      - name: Cache original Vocabulary 3 images inside GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Download the original image files once during deployment.
+          image_dir="_site/vocab-spell-3/images/words"
+          mkdir -p "$image_dir"
+          arena_origin="https://01a0d92a-90a9-7ee4-8467-4b9cd63fa847.arena.site"
+          for word in dangerous naughty comicbook plant dressup dishes earache cage temperature smart; do
+            echo "Downloading original picture: $word"
+            curl --fail --location --silent --show-error \
+              --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 60 \
+              "$arena_origin/images/words/$word.png" \
+              --output "$image_dir/$word.png"
+            test -s "$image_dir/$word.png"
+          done
+          # Validate every download really is a PNG, not an error page.
+          python3 - <<'PY'
+          from pathlib import Path
+          folder = Path('_site/vocab-spell-3/images/words')
+          for image in folder.glob('*.png'):
+              if image.read_bytes()[:8] != b'\x89PNG\r\n\x1a\n':
+                  raise SystemExit(f'Not a valid PNG: {image}')
+          if len(list(folder.glob('*.png'))) != 10:
+              raise SystemExit('Expected 10 original picture files')
+          PY
+          # Update only the published copy of Vocabulary 3.
+          # The original repository file stays unchanged.
+          python3 - <<'PY'
+          from pathlib import Path
+          page = Path('_site/vocab-spell-3/index.html')
+          html = page.read_text(encoding='utf-8')
+          remote = 'https://01a0d92a-90a9-7ee4-8467-4b9cd63fa847.arena.site/images/words/${i}.png'
+          local = 'images/words/${i}.png'
+          if remote not in html:
+              raise SystemExit('Expected original picture URL not found; refusing unsafe edit')
+          page.write_text(html.replace(remote, local), encoding='utf-8')
+          PY
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
