@@ -88,15 +88,37 @@ function send(type: 'completed' | 'certificate', score: number, maxScore: number
   };
   if (type === 'completed') payload.maxScore = maxValue;
   if (type === 'certificate' && title) payload.title = title;
-  // Prefer a session-bound channel: both pages are github.io, and the host
-  // already holds the matching unguessable per-launch session token.
-  if (sessionChannel && sessionIdFromHash()) {
-    try { sessionChannel.postMessage({ ...payload, sessionId: sessionIdFromHash() }); return true; }
-    catch { /* use window messaging */ }
+  // BroadcastChannel and the opener are independent delivery paths. Posting
+  // to a BroadcastChannel only confirms the browser accepted the message;
+  // it does NOT confirm that the bridge tab received it. Use both paths.
+  // The bridge ignores repeated completion/certificate messages for the
+  // same tracked attempt, so a few retries do not create duplicate results.
+  const sessionId = sessionIdFromHash();
+  const deliver = (): boolean => {
+    let posted = false;
+    if (sessionChannel && sessionId) {
+      try {
+        sessionChannel.postMessage({ ...payload, sessionId });
+        posted = true;
+      } catch { /* keep the opener fallback */ }
+    }
+    try {
+      const host = openerWindow();
+      if (host) {
+        host.postMessage(payload, HOST_ORIGIN);
+        posted = true;
+      }
+    } catch { /* keep the channel route */ }
+    return posted;
+  };
+  const posted = deliver();
+  if (posted) {
+    // Small finite retries cover short-lived background-tab or render delays.
+    // No new student, score, or event is invented by these retries.
+    window.setTimeout(deliver, 1000);
+    window.setTimeout(deliver, 3000);
   }
-  try { const host = openerWindow(); if (host) { host.postMessage(payload, HOST_ORIGIN); return true; } }
-  catch { /* disconnected */ }
-  return false;
+  return posted;
 }
 function sessionIdFromHash(): string | null {
   try { return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('sb_session'); }
