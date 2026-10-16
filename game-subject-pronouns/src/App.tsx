@@ -41,7 +41,8 @@ import {
 
 const BRIDGE_MAX_POINTS = (
   DISCOVER_Q.length + IYOU_Q.length + HESHE_Q.length + IT_Q.length + WETHEY_Q.length +
-  FINAL_Q.length + COMPLETE_Q.length + PICTURE_Q.length + MATCH_ITEMS.length + DRAG_ITEMS.length
+  FINAL_Q.length + COMPLETE_Q.length + PICTURE_Q.length + MATCH_ITEMS.length + DRAG_ITEMS.length +
+  HESHE_ONLY.length + WETHEY_ONLY.length + IYOU_ONLY.length + ITTHEY_ONLY.length
 ) * POINTS_PER_CORRECT;
 
 type Screen = "start" | "map" | "station" | "achieve" | "certificate";
