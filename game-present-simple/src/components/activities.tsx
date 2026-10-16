@@ -11,7 +11,7 @@ export type Question = MCQ | Order | Match | TF;
 function shuffle<T>(a: T[]): T[] {
   const arr = [...a];
   for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
-  if (arr.length > 1 && arr.join(' ') === a.join(' ')) return shuffle(a);
+  if (arr.length > 1 && arr.every((value, i) => value === a[i])) [arr[0], arr[1]] = [arr[1], arr[0]];
   return arr;
 }
 
