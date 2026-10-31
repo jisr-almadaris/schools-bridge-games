@@ -5,12 +5,14 @@ import { sound } from "../sound";
 
 export default function Welcome({
   savedName,
+  fixedName,
   onStart,
 }: {
   savedName: string;
+  fixedName?: string;
   onStart: (name: string) => void;
 }) {
-  const [name, setName] = useState(savedName);
+  const [name, setName] = useState(fixedName || savedName);
   const [sailing, setSailing] = useState(false);
   const [shake, setShake] = useState(false);
 
@@ -70,6 +72,7 @@ export default function Welcome({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              readOnly={!!fixedName}
               onKeyDown={(e) => e.key === "Enter" && go()}
               placeholder="اكتبي اسمك هنا..."
               className="w-full rounded-2xl border-4 border-violet-300 bg-violet-50 px-4 py-3 text-center text-xl font-bold text-purple-900 outline-none transition focus:border-teal-400 focus:bg-white"
@@ -78,7 +81,7 @@ export default function Welcome({
               onClick={go}
               className="mt-4 w-full rounded-2xl bg-gradient-to-l from-teal-400 to-emerald-500 px-6 py-4 text-2xl font-extrabold text-white shadow-lg shadow-teal-500/40 transition hover:scale-[1.03] hover:shadow-xl active:scale-95"
             >
-              {savedName ? "أكملي رحلتك! 🚢" : "انطلقي في الرحلة! 🚢"}
+              {savedName && !fixedName ? "أكملي رحلتك! 🚢" : "انطلقي في الرحلة! 🚢"}
             </button>
           </div>
         )}

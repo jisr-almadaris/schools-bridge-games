@@ -4,6 +4,7 @@ const HOST_ORIGIN = 'https://jisr-almadaris.github.io';
 const ACTIVITY_ID = 'game-present-progressive';
 const GAME_KEYS: string[] = [];
 const OWNER_KEY = 'sb_game_owner::' + ACTIVITY_ID;
+const SNAPSHOT_PREFIX = 'sb_game_progress::' + ACTIVITY_ID + '::';
 const SESSION_PREFIX = 'schools-bridge-session-v1::';
 let student: { name: string; school: string } | null = null;
 let completed = false;
@@ -32,7 +33,15 @@ export function prepareBridgeSession(): Promise<void> {
     }
   } catch { sessionChannel = null; }
   if (!host && !sessionChannel) {
-    // Standalone visit cannot inherit progress of a previous student.
+    // Preserve last verified student's journey before starting a standalone demo.
+    try {
+      const owner = localStorage.getItem(OWNER_KEY);
+      if (owner) for (const progressKey of GAME_KEYS) {
+        const value = localStorage.getItem(progressKey);
+        if (value !== null) localStorage.setItem(SNAPSHOT_PREFIX + owner + '::' + progressKey, value);
+      }
+      localStorage.removeItem(OWNER_KEY);
+    } catch { /* storage disabled */ }
     forgetOldProgress();
     return Promise.resolve();
   }
@@ -51,10 +60,33 @@ export function prepareBridgeSession(): Promise<void> {
       if (sessionChannel && d.sessionId !== sessionId) return;
       if (typeof d.name !== 'string' || typeof d.school !== 'string' ||
           !d.name.trim() || !d.school.trim()) return;
-      const key = JSON.stringify([norm(d.name), norm(d.school)]);
+      const key = typeof d.visitor_id === 'string' && d.visitor_id.startsWith('v-')
+        ? 'id:' + d.visitor_id : JSON.stringify([norm(d.name), norm(d.school)]);
       try {
-        if (localStorage.getItem(OWNER_KEY) !== key) {
-          forgetOldProgress();
+        const previous = localStorage.getItem(OWNER_KEY);
+        if (previous !== key) {
+          // Back up each pupil's local journey before switching to another.
+          // Never attach unidentified legacy data to a different student.
+          for (const progressKey of GAME_KEYS) {
+            const value = localStorage.getItem(progressKey);
+            if (value !== null) {
+              const destination = previous
+                ? SNAPSHOT_PREFIX + previous + '::' + progressKey
+                : SNAPSHOT_PREFIX + 'legacy-unattributed::' + progressKey;
+              if (previous || localStorage.getItem(destination) === null)
+                localStorage.setItem(destination, value);
+            }
+          }
+          for (const progressKey of GAME_KEYS) {
+            let snapshot = localStorage.getItem(SNAPSHOT_PREFIX + key + '::' + progressKey);
+            // One-time migration for the same pupil from the prior name/school
+            // key, without changing the old saved record.
+            const legacyOwner = JSON.stringify([norm(d.name), norm(d.school)]);
+            if (snapshot === null && previous === legacyOwner)
+              snapshot = localStorage.getItem(SNAPSHOT_PREFIX + previous + '::' + progressKey);
+            if (snapshot === null) localStorage.removeItem(progressKey);
+            else localStorage.setItem(progressKey, snapshot);
+          }
           localStorage.setItem(OWNER_KEY, key);
         }
       } catch { forgetOldProgress(); }
@@ -67,7 +99,14 @@ export function prepareBridgeSession(): Promise<void> {
     };
     if (sessionChannel) sessionChannel.onmessage = event => accept(event.data);
     window.addEventListener('message', receive);
-    const timer = window.setTimeout(() => { forgetOldProgress(); finish(); }, 6000);
+    const timer = window.setTimeout(() => {
+      // Fail closed on an unverified bridge launch; this session must not
+      // display old names or submit another pupil's results.
+      const root = document.getElementById('root');
+      if (root) root.innerHTML = '<p dir="rtl" style="padding:2rem;text-align:center">تعذّر التحقق من الطالبة. أغلقي اللعبة وافتحيها من بوابة جسر المدارس.</p>';
+      window.removeEventListener('message', receive);
+      settled = true;
+    }, 6000);
     // Reply can arrive over either route; the broadcast route works even if
     // browsers detach window.opener on new tabs.
     try { host?.postMessage({ source: 'schools-bridge-game', type: 'ready',

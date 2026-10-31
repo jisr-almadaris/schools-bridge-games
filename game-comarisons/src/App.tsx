@@ -7,7 +7,7 @@ import Certificate from "./components/Certificate";
 import { ISLANDS } from "./data";
 import { StarIcon } from "./graphics";
 import { sound } from "./sound";
-import { reportCompleted, reportCertificate } from "./bridge";
+import { reportCompleted, reportCertificate, bridgeStudentName, bridgeProgressStorageKey } from "./bridge";
 
 type Screen = "welcome" | "map" | "island" | "achieve" | "certificate";
 
@@ -21,16 +21,19 @@ interface SaveData {
   date: string;
 }
 
-const STORAGE_KEY = "comparison-islands-v1";
+const storageKey = () => bridgeProgressStorageKey(); // session-bound, never a shared pupil key
 
 function load(): SaveData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...emptySave(), ...JSON.parse(raw) };
+    const raw = localStorage.getItem(storageKey());
+    if (raw) {
+      const previous = { ...emptySave(), ...JSON.parse(raw) };
+      return { ...previous, name: bridgeStudentName() || previous.name };
+    }
   } catch {
     /* ignore */
   }
-  return emptySave();
+  return { ...emptySave(), name: bridgeStudentName() };
 }
 
 function emptySave(): SaveData {
@@ -51,14 +54,16 @@ export default function App() {
   /* persist progress */
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
+      localStorage.setItem(storageKey(), JSON.stringify(save));
     } catch {
       /* ignore */
     }
   }, [save]);
 
   const startJourney = (name: string) => {
-    setSave((s) => ({ ...s, name }));
+    // The verified gateway identity always overrides manually edited old names.
+    const activeName = bridgeStudentName() || name;
+    setSave((s) => ({ ...s, name: activeName }));
     setShipIdx(Math.min(save.completed, 5));
     setScreen(save.done ? "achieve" : "map");
   };
@@ -116,7 +121,7 @@ export default function App() {
   const stars = Math.min(save.completed, 5);
 
   if (screen === "welcome") {
-    return <Welcome savedName={save.name} onStart={startJourney} />;
+    return <Welcome savedName={save.name} fixedName={bridgeStudentName()} onStart={startJourney} />;
   }
 
   return (
