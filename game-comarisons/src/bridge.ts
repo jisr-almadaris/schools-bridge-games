@@ -93,7 +93,17 @@ function bridgeTargets(): Window[] {
 
 function post(message: CompletedMessage | CertificateMessage): BridgeStatus {
   const targets = bridgeTargets();
-  if (targets.length === 0) {
+  // The Bridge and games share one origin on GitHub Pages. A session-bound
+  // channel still works if the browser drops window.opener (some mobile tabs).
+  let channelDelivered = false;
+  const sessionId = (() => { try { return new URLSearchParams(location.hash.replace(/^#/, '')).get('sb_session'); } catch { return null; } })();
+  if (identityChannel && sessionId && bridgeIdentity) {
+    try { identityChannel.postMessage({ ...message, sessionId }); channelDelivered = true; }
+    catch { /* use opener where possible */ }
+  }
+  // A typed name in an unverified standalone window must NEVER be reported
+  // as a result for the pupil who happened to be in the bridge earlier.
+  if (!bridgeIdentity || (targets.length === 0 && !channelDelivered)) {
     // Honest limitation, console-only (never shown to the student): the game
     // was not launched from the Jisr Almadaris site, or the opener tab was
     // closed, so there is no window to report to.
@@ -106,7 +116,7 @@ function post(message: CompletedMessage | CertificateMessage): BridgeStatus {
     );
     return "no-bridge";
   }
-  let delivered = false;
+  let delivered = channelDelivered;
   for (const w of targets) {
     try {
       // Explicit target origin — never "*" — so the score can only be
@@ -175,4 +185,72 @@ try {
   );
 } catch {
   /* ignore */
+}
+
+
+/* Student identity is supplied by the Schools Bridge opener, not by a cached
+   name in this game. Wait for the verified handshake BEFORE rendering App. */
+let bridgeIdentity: { name: string; school: string; visitorId: string } | null = null;
+let identityChannel: BroadcastChannel | null = null;
+const standaloneId = 'standalone-' + Math.random().toString(36).slice(2);
+const normalized = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+export function bridgeStudentName(): string { return bridgeIdentity?.name || ''; }
+export function bridgeProgressStorageKey(): string {
+  return 'comparison-islands-v2::' + (bridgeIdentity?.visitorId || standaloneId);
+}
+
+export function prepareBridgeSession(): Promise<void> {
+  const sessionId = (() => {
+    try { return new URLSearchParams(location.hash.replace(/^#/, '')).get('sb_session'); }
+    catch { return null; }
+  })();
+  const host = bridgeTargets()[0] || null;
+  if (sessionId && /^[a-zA-Z0-9_-]{16,100}$/.test(sessionId) &&
+      location.origin === BRIDGE_ORIGIN && typeof BroadcastChannel === 'function') {
+    try { identityChannel = new BroadcastChannel('schools-bridge-session-v1::' + sessionId); }
+    catch { identityChannel = null; }
+  }
+  if (!host && !identityChannel) {
+    // A standalone visit uses an isolated ephemeral local progress key.
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    let settled = false;
+    let timer: number;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      window.removeEventListener('message', receive);
+      resolve();
+    };
+    const accept = (d: any) => {
+      if (settled || !d || d.source !== 'schools-bridge-host' ||
+          d.type !== 'identity' || d.activityId !== ACTIVITY_ID ||
+          (sessionId && d.sessionId !== sessionId) ||
+          typeof d.name !== 'string' || typeof d.school !== 'string' ||
+          !d.name.trim() || !d.school.trim()) return;
+      const name = d.name.trim(), school = d.school.trim();
+      const visitorId = typeof d.visitor_id === 'string' && d.visitor_id.startsWith('v-')
+        ? d.visitor_id : JSON.stringify([normalized(name), normalized(school)]);
+      bridgeIdentity = { name, school, visitorId };
+      done();
+    };
+    const receive = (event: MessageEvent) => {
+      if (event.origin === BRIDGE_ORIGIN && event.source === host) accept(event.data);
+    };
+    window.addEventListener('message', receive);
+    if (identityChannel) identityChannel.onmessage = event => accept(event.data);
+    timer = window.setTimeout(() => {
+      // A bridge-launched game must not run if identity verification fails.
+      const root = document.getElementById('root');
+      if (root) root.innerHTML = '<p dir="rtl" style="padding:2rem;text-align:center">تعذّر التحقق من الطالبة. أغلقي اللعبة وافتحيها من بوابة جسر المدارس.</p>';
+      settled = true;
+      window.removeEventListener('message', receive);
+    }, 6000);
+    const ready = { source: BRIDGE_SOURCE, type: 'ready', activityId: ACTIVITY_ID,
+      ...(sessionId ? { sessionId } : {}) };
+    try { host?.postMessage(ready, BRIDGE_ORIGIN); } catch { /* channel fallback */ }
+    try { identityChannel?.postMessage(ready); } catch { /* opener fallback */ }
+  });
 }
