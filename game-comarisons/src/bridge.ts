@@ -38,6 +38,14 @@ interface CompletedMessage {
   maxScore: number;
 }
 
+interface LearningTraceMessage {
+  source: typeof BRIDGE_SOURCE;
+  activityId: typeof ACTIVITY_ID;
+  type: 'learning-trace';
+  chunk: number;
+  items: ReadonlyArray<{question_index:number; correct:boolean; response_ms:number; hint_used:boolean}>;
+}
+
 interface CertificateMessage {
   source: typeof BRIDGE_SOURCE;
   activityId: typeof ACTIVITY_ID;
@@ -91,7 +99,7 @@ function bridgeTargets(): Window[] {
   return wins;
 }
 
-function post(message: CompletedMessage | CertificateMessage): BridgeStatus {
+function post(message: CompletedMessage | CertificateMessage | LearningTraceMessage): BridgeStatus {
   const targets = bridgeTargets();
   // The Bridge and games share one origin on GitHub Pages. A session-bound
   // channel still works if the browser drops window.opener (some mobile tabs).
@@ -112,7 +120,7 @@ function post(message: CompletedMessage | CertificateMessage): BridgeStatus {
         `"${ACTIVITY_ID}" cannot reach the Teacher Control Center. ` +
         `The receiver also requires the ORIGINAL Jisr tab to still hold this ` +
         `attempt in memory. Payload (kept local):`,
-      JSON.stringify(message)
+      message.type === 'learning-trace' ? `[${message.items.length} anonymized question events]` : JSON.stringify(message)
     );
     return "no-bridge";
   }
@@ -130,7 +138,7 @@ function post(message: CompletedMessage | CertificateMessage): BridgeStatus {
   if (delivered) {
     console.info(
       `[${BRIDGE_SOURCE} v${SENDER_VERSION}] Dispatched "${message.type}" for "${ACTIVITY_ID}" → ${BRIDGE_ORIGIN}:`,
-      JSON.stringify(message)
+      message.type === 'learning-trace' ? `[${message.items.length} anonymized question events]` : JSON.stringify(message)
     );
     return "sent";
   }
@@ -154,6 +162,20 @@ export function reportCompleted(score: number, maxScore: number): BridgeStatus {
   const status = post({ source: BRIDGE_SOURCE, activityId: ACTIVITY_ID, type: "completed", score, maxScore });
   if (status === "sent") completedSentFor = key;
   return status;
+}
+
+export interface QuestionObservation {
+  question_index: number;
+  correct: boolean;
+  response_ms: number;
+  hint_used: boolean;
+}
+/** Per-island, answer-level evidence, no name or question text. */
+export function reportLearningTrace(chunk: number, items: QuestionObservation[]): BridgeStatus {
+  if (!Number.isInteger(chunk) || chunk<0 || chunk>4 || !items.length || items.length>20) return 'error';
+  return post({source:BRIDGE_SOURCE,activityId:ACTIVITY_ID,type:'learning-trace',chunk,
+    items:items.map(x=>({question_index:x.question_index,correct:x.correct,
+      response_ms:Math.min(120000,Math.max(0,Math.round(x.response_ms))),hint_used:x.hint_used}))});
 }
 
 /**

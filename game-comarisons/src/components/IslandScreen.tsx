@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { QuestionObservation } from "../bridge";
 import { Scene, StarIcon } from "../graphics";
 import type { IslandData } from "../data";
 import { sound } from "../sound";
@@ -10,13 +11,16 @@ export default function IslandScreen({
 }: {
   island: IslandData;
   islandIdx: number;
-  onComplete: (correct: number, total: number) => void;
+  onComplete: (correct: number, total: number, trace: QuestionObservation[]) => void;
 }) {
   const [phase, setPhase] = useState<"lesson" | "quiz" | "star">("lesson");
   const [qIdx, setQIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [showHint, setShowHint] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const questionStartedAt = useRef(performance.now());
+  const trace = useRef<QuestionObservation[]>([]);
+  const hintSeen = useRef(false);
 
   const q = island.questions[qIdx];
   const total = island.questions.length;
@@ -24,6 +28,9 @@ export default function IslandScreen({
 
   const choose = (i: number) => {
     if (selected !== null) return;
+    trace.current.push({question_index:qIdx,correct:i===q.correct,
+      response_ms:Math.max(0,Math.round(performance.now()-questionStartedAt.current)),
+      hint_used:hintSeen.current});
     setSelected(i);
     if (i === q.correct) {
       sound.correct();
@@ -39,6 +46,8 @@ export default function IslandScreen({
       setQIdx(qIdx + 1);
       setSelected(null);
       setShowHint(false);
+      hintSeen.current=false;
+      questionStartedAt.current=performance.now();
     } else {
       setPhase("star");
       setTimeout(() => sound.star(), 350);
@@ -65,7 +74,7 @@ export default function IslandScreen({
           <button
             onClick={() => {
               sound.click();
-              onComplete(correctCount, total);
+              onComplete(correctCount, total, trace.current);
             }}
             className="mt-5 w-full rounded-2xl bg-gradient-to-l from-teal-400 to-emerald-500 px-6 py-4 text-xl font-extrabold text-white shadow-lg transition hover:scale-[1.03] active:scale-95"
           >
@@ -143,6 +152,7 @@ export default function IslandScreen({
             <button
               onClick={() => {
                 sound.click();
+                questionStartedAt.current=performance.now();
                 setPhase("quiz");
               }}
               className="mt-6 w-full rounded-2xl bg-gradient-to-l from-fuchsia-500 to-purple-600 px-6 py-4 text-2xl font-extrabold text-white shadow-lg shadow-purple-500/40 transition hover:scale-[1.02] active:scale-95"
@@ -219,6 +229,7 @@ export default function IslandScreen({
             <button
               onClick={() => {
                 sound.click();
+                hintSeen.current=true;
                 setShowHint((h) => !h);
               }}
               className="rounded-2xl bg-gradient-to-l from-amber-300 to-yellow-400 px-5 py-2.5 text-lg font-extrabold text-amber-900 shadow transition hover:scale-105 active:scale-95"
