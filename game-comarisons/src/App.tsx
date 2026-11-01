@@ -7,7 +7,7 @@ import Certificate from "./components/Certificate";
 import { ISLANDS } from "./data";
 import { StarIcon } from "./graphics";
 import { sound } from "./sound";
-import { reportCompleted, reportCertificate, bridgeStudentName, bridgeProgressStorageKey } from "./bridge";
+import { reportCompleted, reportCertificate, reportLearningTrace, bridgeStudentName, bridgeProgressStorageKey } from "./bridge";
 
 type Screen = "welcome" | "map" | "island" | "achieve" | "certificate";
 
@@ -73,7 +73,8 @@ export default function App() {
     setScreen("island");
   };
 
-  const completeIsland = (correct: number, total: number) => {
+  const completeIsland = (correct: number, total: number, trace: import("./bridge").QuestionObservation[]) => {
+    reportLearningTrace(currentIsland,trace);
     const firstTime = currentIsland === save.completed;
     const isFinal = currentIsland === 4;
     setSave((s) => {
