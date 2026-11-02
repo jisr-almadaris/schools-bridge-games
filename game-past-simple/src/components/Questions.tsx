@@ -1,3 +1,4 @@
+import { recordBridgeQuestion } from "../bridge";
 import { useMemo, useState, DragEvent } from "react";
 import { ChoiceQ, MatchQ, OrderQ } from "../data";
 import { Btn, MemoryFrame, Panel } from "./ui";
@@ -57,6 +58,7 @@ export function ChoiceQuestion({ q, onSolved, onNext, nextLabel = "التالي 
       setSolved(true);
       sfx.success();
       speak(`${q.before} ${q.answer} ${q.after}`);
+      recordBridgeQuestion(q.id, tries === 0);
       onSolved(tries === 0);
     } else {
       setTries((t) => t + 1);
@@ -218,6 +220,7 @@ export function OrderQuestion({ q, onSolved, onNext, nextLabel = "التالي �
       setSolved(true);
       sfx.success();
       speak(q.answer.join(" ") + ".");
+      recordBridgeQuestion(q.id, tries === 0);
       onSolved(tries === 0);
     } else {
       setTries((t) => t + 1);
@@ -370,7 +373,8 @@ export function MatchQuestion({ q, onSolved, onNext, nextLabel = "التالي �
       speak(`${pair.base}, ${pair.past}`);
       if (Object.keys(next).length === q.pairs.length) {
         sfx.success();
-        onSolved(tries === 0);
+        recordBridgeQuestion(q.id, tries === 0);
+      onSolved(tries === 0);
       }
     } else {
       setTries((t) => t + 1);

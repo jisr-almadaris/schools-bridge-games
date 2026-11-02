@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { HUD, SecretsBook, VoiceSubtitle } from "./components/UI";
 import { ROOMS, TOTAL_QUESTIONS } from "./data";
-import { reportCertificate } from "./bridge";
+import { reportCertificate, recordBridgeQuestion } from "./bridge";
 import { clearProgress, freshProgress, loadProgress, resumeScene, saveProgress, type Progress, type Scene } from "./store";
 import { Opening, Title } from "./scenes/Intro";
 import { ElevatorCode, Reception } from "./scenes/Lobby";
@@ -21,10 +21,13 @@ export default function App() {
   const up = useCallback((fn: (q: Progress) => Partial<Progress>) => setP((q) => ({ ...q, ...fn(q) })), []);
   const go = (scene: Scene) => up(() => ({ scene }));
 
-  const solvedQ = (id: string, first: boolean) => up((q) => ({
+  const solvedQ = (id: string, first: boolean) => {
+    recordBridgeQuestion(id,first);
+    up((q) => ({
     solved: q.solved.includes(id) ? q.solved : [...q.solved, id],
     firstTry: first && !q.firstTry.includes(id) && !q.solved.includes(id) ? [...q.firstTry, id] : q.firstTry,
-  }));
+    }));
+  };
 
   let view: ReactNode = null;
   switch (p.scene) {

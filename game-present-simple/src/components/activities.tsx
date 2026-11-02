@@ -1,3 +1,4 @@
+import { recordBridgeQuestion } from "../bridge";
 import { useMemo, useRef, useState } from 'react';
 import { audio } from '../audio';
 import { BigButton, Guide } from './ui';
@@ -277,6 +278,11 @@ export function ActivityRunner({ questions, onFinish, onScore, title }: { questi
     // Ignore accidental double taps while React moves to the next activity.
     if (advancing.current) return;
     advancing.current = true;
+    const group: Record<string,string> = {
+      'تمرين سريع':'packing','أنشطة المطار':'airport','تدريب الترانزيت':'transit',
+      'أنشطة الطائرة':'plane','التحدي النهائي':'final'
+    };
+    recordBridgeQuestion(`ps-${group[title || ''] || 'activity'}-${i}`,first);
     onScore(first ? 2 : 1);
     if (i + 1 < questions.length) {
       setI(current => current + 1);

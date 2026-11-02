@@ -1,4 +1,5 @@
-import { reportCertificate, bridgeStudentName } from "./bridge";
+import { reportCertificate, reportLearningTrace, bridgeStudentName, startBridgeReplay,
+  type BridgeQuestionEvidence } from "./bridge";
 import { useEffect, useRef, useState } from 'react';
 import { FreqBot, Gear, Girl, InitiativeBadge, MachineShell, PowerUpOverlay, TopBar } from './components/visuals';
 import Tutorial from './components/tutorial';
@@ -20,6 +21,7 @@ const UNIT_ICONS = ['⚙️🌀', '🔧🧩', '🔍📡', '🏗️🔥'];
 const UNIT_AR = ['توربين الضمائر', 'مركّب الأسئلة', 'ماسح التكرار', 'محرك الجمل'];
 
 export default function App() {
+  const masterEvidence=useRef<BridgeQuestionEvidence[]>([]);
   const [phase, setPhase] = useState<Phase>(() => {
     const p = (localStorage.getItem('hm_phase') as Phase) || 'start';
     if (p === 'boot') return 'dark';
@@ -130,7 +132,10 @@ export default function App() {
     later(() => { setOverlay(null); setPhase('master'); }, 2200);
   };
 
-  const winMaster = () => {
+  const winMaster = (items:BridgeQuestionEvidence[]) => {
+    masterEvidence.current=items;
+    if(items.length===9 && new Set(items.map(x=>x.question_index)).size===9)
+      reportLearningTrace(0,items);
     sfx.core(); sfx.cheer();
     setOverlay({ text: 'FULL POWER!', sub: 'كل الآلة تعمل معًا!!! ⚙️⚡💎' });
     setRumbling(true);
@@ -143,10 +148,18 @@ export default function App() {
     later(() => { setPrintStep(1); sfx.gear(); }, 1200);
     later(() => { setPrintStep(2); sfx.clank(); }, 2600);
     later(() => { setPrintStep(3); sfx.cheer(); sfx.powerup(); }, 3800);
-    later(() => { reportCertificate(5, 5, 'آلة العادات العجيبة'); setPhase('certificate'); stopMusic(); startMusic(false); }, 4800);
+    later(() => {
+      // Never claim a perfect mark for merely reaching the certificate.
+      const items=masterEvidence.current;
+      if(items.length===9 && new Set(items.map(x=>x.question_index)).size===9)
+        reportCertificate(items.filter(x=>x.correct).length, 9, 'آلة العادات العجيبة');
+      setPhase('certificate'); stopMusic(); startMusic(false);
+    }, 4800);
   };
 
   const restart = () => {
+    startBridgeReplay();
+    masterEvidence.current=[];
     ['hm_phase','hm_name','hm_power','hm_chips','hm_done'].forEach(key => localStorage.removeItem(key));
     setName(''); setPower(0); setChips([null, null, null, null]); setDoneUnits([false, false, false, false]);
     setActiveUnit(1); setPhase('start'); setGateOpen(false); setBootStep(0); stopMusic();
