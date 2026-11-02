@@ -164,10 +164,71 @@ function sessionIdFromHash(): string | null {
   catch { return null; }
 }
 export function reportCompleted(score: number, maxScore: number) {
+  flushBridgeQuestions();
   if (!completed && send('completed', score, maxScore)) completed = true;
 }
 export function reportCertificate(score: number, maxScore: number, title: string) {
+  flushBridgeQuestions();
   if (certified) return;
   reportCompleted(score, maxScore);
   if (send('certificate', score, maxScore, title)) certified = true;
+}
+
+/** Optional, non-identifying per-question evidence. This never blocks scores or certificates. */
+export type BridgeQuestionEvidence = {question_index:number;correct:boolean;response_ms:number;hint_used:boolean};
+export function reportLearningTrace(chunk:number, items:BridgeQuestionEvidence[]):boolean {
+  if (!student || !Number.isInteger(chunk) || chunk<0 || chunk>4 ||
+      !Array.isArray(items) || items.length===0 || items.length>20 ||
+      items.some(it => !Number.isInteger(it.question_index) || it.question_index<0 ||
+        it.question_index>30 || typeof it.correct!=='boolean' ||
+        typeof it.hint_used!=='boolean' || !Number.isInteger(it.response_ms) ||
+        it.response_ms<0 || it.response_ms>120000)) return false;
+  const payload={source:'schools-bridge-game',activityId:ACTIVITY_ID,type:'learning-trace',chunk,items};
+  const sessionId=sessionIdFromHash();
+  const deliver=():boolean=>{
+    let posted=false;
+    if (sessionChannel && sessionId) {
+      try {sessionChannel.postMessage({...payload,sessionId});posted=true;} catch { /* opener fallback */ }
+    }
+    try {const host=openerWindow();if(host){host.postMessage(payload,HOST_ORIGIN);posted=true;}}
+    catch { /* channel fallback */ }
+    return posted;
+  };
+  const posted=deliver();
+  if(posted){window.setTimeout(deliver,1000);window.setTimeout(deliver,3000);}
+  return posted;
+}
+
+/** First-attempt evidence, never names or answer text. Duration=0 means not measured.
+ * Batches are queued by the host; reporting cannot interrupt the game. */
+type LocalAnswer = {question_index:number;question_id:string;correct:boolean;response_ms:number;hint_used:boolean};
+const pendingAnswers: LocalAnswer[] = [];
+const answerKeys = new Set<string>();
+let traceSent = false;
+export function recordBridgeQuestion(id: string, correctOnFirstTry: boolean, hintUsed = false): void {
+  if (!student) return;
+  if (traceSent) {
+    traceSent=false;completed=false;certified=false;
+    pendingAnswers.length=0;answerKeys.clear();
+    const roundId=window.crypto?.randomUUID?.() ||
+      ('r-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+    const msg={source:'schools-bridge-game',activityId:ACTIVITY_ID,type:'new-round',round_id:roundId};
+    const sid=sessionIdFromHash();
+    try {if(sessionChannel && sid) sessionChannel.postMessage({...msg,sessionId:sid});}catch{}
+    try {openerWindow()?.postMessage(msg,HOST_ORIGIN);}catch{}
+  }
+  const qid=String(id || '').replace(/[^A-Za-z0-9._:-]/g,'-').slice(0,64);
+  if (!qid || answerKeys.has(qid) || pendingAnswers.length >= 31) return;
+  answerKeys.add(qid);
+  pendingAnswers.push({question_index:pendingAnswers.length,question_id:qid,
+    correct:Boolean(correctOnFirstTry),response_ms:0,hint_used:Boolean(hintUsed)});
+}
+function flushBridgeQuestions(): void {
+  if (!student || traceSent || pendingAnswers.length===0) return;
+  traceSent=true;
+  for (let offset=0;offset<pendingAnswers.length;offset+=20) {
+    const chunk=Math.floor(offset/20);
+    const items=pendingAnswers.slice(offset,offset+20);
+    reportLearningTrace(chunk,items);
+  }
 }

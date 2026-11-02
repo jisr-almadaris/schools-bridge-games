@@ -1,4 +1,4 @@
-import { reportCompleted, reportCertificate, bridgeStudentName } from "./bridge";
+import { reportCompleted, reportCertificate, bridgeStudentName, recordBridgeQuestion } from "./bridge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { audio } from "./audio";
 import { ObjectArt, Seal } from "./objects";
@@ -343,10 +343,12 @@ function FeedbackBox({
 
 function McqFlow({
   questions,
+  scope,
   onDone,
   onAward,
 }: {
   questions: Mcq[];
+  scope: string;
   onDone: () => void;
   onAward: (points: number, star: boolean) => void;
 }) {
@@ -374,11 +376,13 @@ function McqFlow({
     audio.play("click");
     setPicked(opt);
     if (opt === q.answer) {
+      recordBridgeQuestion(`subject-${scope}-mcq-${index}`,tries===0);
       audio.play("correct");
       audio.play("star");
       setStatus("correct");
       onAward(tries === 0 ? POINTS_PER_CORRECT : 5, true);
     } else if (tries + 1 >= 2) {
+      recordBridgeQuestion(`subject-${scope}-mcq-${index}`,false);
       audio.play("wrong");
       setStatus("revealed");
       setDead((d) => [...d, opt]);
@@ -497,6 +501,7 @@ function PairPlay({
   function attempt(picId: string, pronoun: PronounId) {
     if (feedback || placed[picId]) return;
     const item = items.find((i) => i.id === picId)!;
+    recordBridgeQuestion(`subject-${mode}-pair-${picId}`, item.pronoun === pronoun);
     if (item.pronoun === pronoun) {
       audio.play("correct");
       audio.play("star");
@@ -839,7 +844,7 @@ function StationView({
         {pages.length > 0 && phase === "teach" && <TeachPager pages={pages} onStartQuiz={() => setPhase("quiz")} />}
 
         {phase === "quiz" && quizFor.length > 0 && (
-          <McqFlow questions={quizFor} onAward={onAward} onDone={finishStation} />
+          <McqFlow scope={id} questions={quizFor} onAward={onAward} onDone={finishStation} />
         )}
 
         {id === "games" && phase === "hub" && (
@@ -912,6 +917,7 @@ function StationView({
         )}
         {phase === "play" && play === "complete" && (
           <McqFlow
+            scope="complete"
             questions={COMPLETE_Q}
             onAward={onAward}
             onDone={() => {
@@ -923,6 +929,7 @@ function StationView({
         )}
         {phase === "play" && play === "picture" && (
           <McqFlow
+            scope="picture"
             questions={PICTURE_Q}
             onAward={onAward}
             onDone={() => {
@@ -934,6 +941,7 @@ function StationView({
         )}
         {phase === "play" && play === "he-she" && (
           <McqFlow
+            scope="he-she"
             questions={HESHE_ONLY}
             onAward={onAward}
             onDone={() => {
@@ -945,6 +953,7 @@ function StationView({
         )}
         {phase === "play" && play === "we-they" && (
           <McqFlow
+            scope="we-they"
             questions={WETHEY_ONLY}
             onAward={onAward}
             onDone={() => {
@@ -956,6 +965,7 @@ function StationView({
         )}
         {phase === "play" && play === "i-you" && (
           <McqFlow
+            scope="i-you"
             questions={IYOU_ONLY}
             onAward={onAward}
             onDone={() => {
@@ -967,6 +977,7 @@ function StationView({
         )}
         {phase === "play" && play === "it-they" && (
           <McqFlow
+            scope="it-they"
             questions={ITTHEY_ONLY}
             onAward={onAward}
             onDone={() => {

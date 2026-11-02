@@ -1,3 +1,4 @@
+import { recordBridgeQuestion } from "../bridge";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import Clam from "../components/Clam";
@@ -110,6 +111,7 @@ export default function GlowingDepths({
   const shellRef = useRef<HTMLDivElement>(null);
 
   const solved = (origin: DOMRect | null, first: boolean) => {
+    recordBridgeQuestion(`pp-final-${idx+1}`,first);
     if (first) firstTries.current += 1;
     setLit((l) => Math.min(5, l + 1));
     if (idx === 4) {

@@ -1,4 +1,4 @@
-import { reportCompleted, reportCertificate, bridgeStudentName } from "./bridge";
+import { reportCompleted, reportCertificate, bridgeStudentName, recordBridgeQuestion } from "./bridge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { audio } from "./audio";
 import { CHALLENGES, VAULT_CODE, BADGES, INITIATIVE, PRONOUNS, type Challenge } from "./data";
@@ -62,6 +62,7 @@ export default function App() {
   const [matched, setMatched] = useState<string[]>([]);
   const [selOwner, setSelOwner] = useState<string | null>(null);
   const [wrongOwner, setWrongOwner] = useState<string | null>(null);
+  const bridgeHadMatchError = useRef(false);
 
   // vault state
   const [vaultStage, setVaultStage] = useState<"walk" | "keypad" | "opening" | "open">(
@@ -192,6 +193,7 @@ export default function App() {
     if (feedback === "correct") return;
     if (i === current.correct) {
       audio.correct();
+      recordBridgeQuestion(`possessives-${currentIndex}`, wrongOptions.length === 0);
       setSelected(i);
       setFeedback("correct");
       if (!solved[currentIndex]) {
@@ -226,12 +228,14 @@ export default function App() {
       if (next.length === current.pairs?.length) {
         // fully solved
         if (!solved[currentIndex]) setScore((s) => s + 100);
+        recordBridgeQuestion(`possessives-${currentIndex}`, !bridgeHadMatchError.current);
         setFeedback("correct");
         setRewardPop(current.reward.label);
         audio.key();
       }
     } else {
       audio.wrong();
+      bridgeHadMatchError.current = true;
       setWrongOwner(selOwner);
       const t = window.setTimeout(() => {
         setWrongOwner(null);
@@ -250,6 +254,7 @@ export default function App() {
     setChallengeOpen(false);
     setRewardPop(null);
     resetChallengeUI();
+    bridgeHadMatchError.current = false;
     const allDone = newSolved.every(Boolean);
     if (allDone) {
       // optional review station before the big case

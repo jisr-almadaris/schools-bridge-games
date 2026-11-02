@@ -1,4 +1,5 @@
-import { reportCompleted, reportCertificate, bridgeStudentName } from "./bridge";
+import { reportCompleted, reportCertificate, reportLearningTrace, bridgeStudentName, startBridgeReplay,
+  type BridgeQuestionEvidence } from "./bridge";
 import { useCallback, useEffect, useState } from 'react';
 import { STATIONS } from './data/content';
 import { loadProgress, newProgress, saveProgress, type Progress } from './lib/progress';
@@ -111,12 +112,18 @@ export default function App() {
     setScreen('map');
   };
 
-  const challengeDone = () => {
-    reportCompleted(Math.min(100, progress.stars * 10 + 40), 100);
+  const challengeDone = (items:BridgeQuestionEvidence[]) => {
+    // The scored assessment is exactly the five final questions, first attempts.
+    const valid=items.length===5 && new Set(items.map(x=>x.question_index)).size===5;
+    const correct=items.filter(x=>x.correct).length;
+    if (valid) {
+      reportLearningTrace(0,items);
+      reportCompleted(correct,5);
+    }
     setProgress((p) => ({
       ...p,
       challengeDone: true,
-      score: Math.min(100, p.stars * 10 + 40),
+      score: valid ? Math.round(correct/5*100) : 0,
       finishedAt: new Date().toISOString(),
     }));
     setEndingIntro(true);
@@ -124,6 +131,7 @@ export default function App() {
   };
 
   const restart = () => {
+    startBridgeReplay();
     sound.play('click');
     setProgress((p) => newProgress(p.name));
     setScreen('start');
@@ -174,7 +182,8 @@ export default function App() {
           skipIntro={!endingIntro}
           onCertificate={() => {
             sound.play('click');
-            reportCertificate(progress.score, 100, 'الفضاء – WH Questions');
+            // The certificate screen still opens when the AI/telemetry is unavailable.
+            if (progress.challengeDone) reportCertificate(progress.score, 100, 'الفضاء – WH Questions');
             setScreen('certificate');
           }}
         />
@@ -183,7 +192,7 @@ export default function App() {
         <CertificateScreen
           topBar={topBar}
           name={progress.name}
-          score={progress.score || 100}
+          score={progress.score}
           date={progress.finishedAt ? new Date(progress.finishedAt) : new Date()}
           onBack={() => {
             sound.play('click');

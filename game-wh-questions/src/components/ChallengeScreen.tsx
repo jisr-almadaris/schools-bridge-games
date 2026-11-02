@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, useRef, useEffect, type CSSProperties, type ReactNode } from 'react';
 import { byKey, CHALLENGE, type WhKey } from '../data/content';
 import { shuffle } from '../lib/progress';
 import { sound } from '../lib/sound';
@@ -8,11 +8,13 @@ import { Robot, type RobotMood } from './art/Robot';
 import { ScenePicture } from './ScenePicture';
 import { SpaceBackground } from './SpaceBackground';
 import { Bubble, Confetti } from './ui';
+import type { BridgeQuestionEvidence } from '../bridge';
 
 const PRAISE = ['🎉 رائع!', '🌟 ممتاز!', '✨ أحسنتِ!', '💫 مبدعة!', '🚀 بطلة!'];
 
 /** 5 quick visual review questions. How rotates in by random selection. */
-export function ChallengeScreen({ topBar, onDone }: { topBar: ReactNode; onDone: () => void }) {
+export function ChallengeScreen({ topBar, onDone }: { topBar: ReactNode;
+  onDone: (items:BridgeQuestionEvidence[]) => void }) {
   const items = useMemo(
     () =>
       shuffle(CHALLENGE)
@@ -26,12 +28,34 @@ export function ChallengeScreen({ topBar, onDone }: { topBar: ReactNode; onDone:
   const [msg, setMsg] = useState<string | null>('🌌 خمسة أسئلة سريعة وسهلة!');
   const [mood, setMood] = useState<RobotMood>('talk');
 
+  const evidence = useRef<BridgeQuestionEvidence[]>([]);
+  const questionStartedAt = useRef(performance.now());
+  const hiddenAt = useRef<number | null>(document.hidden ? performance.now() : null);
+  const hiddenTotal = useRef(0);
+  const hinted = useRef(false);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden && hiddenAt.current === null) hiddenAt.current=performance.now();
+      if (!document.hidden && hiddenAt.current !== null) {
+        hiddenTotal.current+=performance.now()-hiddenAt.current;hiddenAt.current=null;
+      }
+    };
+    document.addEventListener('visibilitychange',onVisibility);
+    return () => document.removeEventListener('visibilitychange',onVisibility);
+  },[]);
   const it = items[i];
   const answer = byKey(it.key);
   const last = i === items.length - 1;
 
   const pick = (k: WhKey) => {
     if (solved) return;
+    // First answer only; retrying a wrong answer must not turn it into mastery.
+    if (!evidence.current.some(x => x.question_index===i)) {
+      const now=performance.now();
+      const hidden=hiddenTotal.current+(hiddenAt.current===null?0:now-hiddenAt.current);
+      evidence.current.push({question_index:i,correct:k===it.key,hint_used:hinted.current,
+        response_ms:Math.max(0,Math.min(120000,Math.round(now-questionStartedAt.current-hidden)))});
+    }
     if (k === it.key) {
       setSolved(true);
       setMood('happy');
@@ -48,6 +72,7 @@ export function ChallengeScreen({ topBar, onDone }: { topBar: ReactNode; onDone:
   };
 
   const help = () => {
+    hinted.current=true;
     sound.play('pop');
     setMood('talk');
     setMsg(`💡 فكري: أي كلمة تعني «${answer.ar}»؟`);
@@ -57,12 +82,14 @@ export function ChallengeScreen({ topBar, onDone }: { topBar: ReactNode; onDone:
     sound.play('click');
     if (!last) {
       setI(i + 1);
+      questionStartedAt.current=performance.now(); hiddenTotal.current=0;
+      hiddenAt.current=document.hidden ? performance.now() : null; hinted.current=false;
       setSolved(false);
       setMsg(null);
       setMood('normal');
     } else {
       sound.play('star');
-      onDone();
+      onDone(evidence.current);
     }
   };
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import type { BridgeQuestionEvidence } from '../bridge';
 import { EnglishLine, FreqBot } from './visuals';
 import { sfx } from '../lib/audio';
 
@@ -49,8 +50,28 @@ export function MasterLock({ code, onUnlock }: { code: number[]; onUnlock: () =>
 
 const FREQ_OPTS = ['always', 'usually', 'sometimes', 'rarely', 'never'];
 
-export default function MasterMode({ onWin }: { onWin: () => void }) {
+export default function MasterMode({ onWin }: { onWin: (items:BridgeQuestionEvidence[]) => void }) {
   const [step, setStep] = useState(0);
+  const evidence=useRef<BridgeQuestionEvidence[]>([]);
+  const clock=useRef({started:performance.now(),hidden:document.hidden ? performance.now() : null as number|null,hiddenMs:0});
+  useEffect(() => {
+    const update=() => {
+      const c=clock.current;
+      if(document.hidden && c.hidden===null)c.hidden=performance.now();
+      else if(!document.hidden && c.hidden!==null){c.hiddenMs+=performance.now()-c.hidden;c.hidden=null;}
+    };
+    document.addEventListener('visibilitychange',update);
+    return () => document.removeEventListener('visibilitychange',update);
+  },[]);
+  const observe=(q:number,correct:boolean) => {
+    if(evidence.current.some(x=>x.question_index===q))return;
+    const c=clock.current,now=performance.now();
+    evidence.current.push({question_index:q,correct,hint_used:false,
+      response_ms:Math.min(120000,Math.max(0,Math.round(now-c.started-c.hiddenMs-(c.hidden===null?0:now-c.hidden))))});
+  };
+  const nextClock=() => {clock.current={started:performance.now(),hidden:document.hidden ? performance.now():null,hiddenMs:0};};
+  useEffect(nextClock,[step]);
+
   const [msg, setMsg] = useState<React.ReactNode>(<>وضع الماستر! 7 تحديات نهائية — كل إجابة تُشغّل نظامًا في الآلة! ⚡</>);
   const [mood, setMood] = useState<'happy' | 'think' | 'cheer' | 'wow'>('happy');
   const [systems, setSystems] = useState<string[]>([]);
@@ -94,9 +115,10 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           <div className="mt-4 flex justify-center gap-3" dir="ltr">
             {(['DO', 'DOES'] as const).map(o => (
               <button key={o} onClick={() => {
+                observe(blastIdx,o===BLASTS[blastIdx].ok);
                 if (o === BLASTS[blastIdx].ok) {
                   sfx.zap();
-                  if (blastIdx === 0) { setBlastIdx(1); setMsg(<>أصبتِها! 💥 واحدة أخرى بسرعة!</>); }
+                  if (blastIdx === 0) { nextClock(); setBlastIdx(1); setMsg(<>أصبتِها! 💥 واحدة أخرى بسرعة!</>); }
                   else powerSystem('GEARS', 1, <>التروس تدور بأقصى سرعة!</>);
                 } else fail(<>من هو الفاعل؟ <span className="font-en" dir="ltr">He → DOES</span> • <span className="font-en" dir="ltr">We → DO</span></>);
               }} className="font-en rounded-2xl border-2 border-cyan-300 bg-cyan-400/15 px-10 py-3 text-2xl font-black text-cyan-100 hover:scale-105 active:scale-95">{o}</button>
@@ -119,7 +141,9 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           </div>
           <button onClick={() => {
             const ans = ['How often', 'does', 'she', 'play', 'tennis', '?'];
-            if (q2slots.length === ans.length && q2slots.every((s, i) => s.toLowerCase() === ans[i].toLowerCase())) powerSystem('TUBES', 2, <>الطاقة تمر في الأنابيب الزجاجية!</>);
+            const ok=q2slots.length === ans.length && q2slots.every((s, i) => s.toLowerCase() === ans[i].toLowerCase());
+            observe(2,ok);
+            if (ok) powerSystem('TUBES', 2, <>الطاقة تمر في الأنابيب الزجاجية!</>);
             else fail(<>ابدئي بـ <span className="font-en" dir="ltr">HOW OFTEN</span> ثم <span className="font-en" dir="ltr">DO/DOES</span>… 🧩</>);
           }} className="mt-2 w-full rounded-2xl bg-gradient-to-l from-amber-300 to-orange-400 py-3 font-black text-black">⚡ ASSEMBLE</button>
         </div>
@@ -134,7 +158,7 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           <div className="mt-2 text-sm font-bold text-white">اضغطي التصحيح الصحيح:</div>
           <div className="mt-2 flex justify-center gap-2" dir="ltr">
             {['walk', 'walks', 'walked'].map(o => (
-              <button key={o} dir="ltr" onClick={() => o === 'walk' ? powerSystem('SCANNER', 3, <><span className="font-en" dir="ltr">After DOES → base verb ✓</span></>) : fail(<>بعد <span className="font-en" dir="ltr">DOES</span> نستخدم الفعل الأساسي بدون s! ⚠️</>)} className="font-en rounded-xl border-2 border-white/20 bg-white/5 px-6 py-2.5 text-lg font-bold text-white hover:border-emerald-300">{o}</button>
+              <button key={o} dir="ltr" onClick={() => { observe(3,o==='walk'); return o === 'walk' ? powerSystem('SCANNER', 3, <><span className="font-en" dir="ltr">After DOES → base verb ✓</span></>) : fail(<>بعد <span className="font-en" dir="ltr">DOES</span> نستخدم الفعل الأساسي بدون s! ⚠️</>); }} className="font-en rounded-xl border-2 border-white/20 bg-white/5 px-6 py-2.5 text-lg font-bold text-white hover:border-emerald-300">{o}</button>
             ))}
           </div>
         </div>
@@ -149,7 +173,7 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           </div>
           <div className="mx-auto mt-2 max-w-md rounded-xl bg-white/[.06] p-3" dir="ltr"><EnglishLine className="text-lg text-white">I ___ forget to feed my pet. 🐶</EnglishLine></div>
           <div className="mt-2 flex flex-wrap justify-center gap-2" dir="ltr">
-            {FREQ_OPTS.map(o => <button key={o} onClick={() => o === 'never' ? powerSystem('TURBINE', 4) : fail(<>اقرئي الدليل: <span className="font-en" dir="ltr">0%</span> تعني…؟ 🔍</>)} className="font-en rounded-xl border-2 border-slate-300/50 bg-[#1a2450] px-4 py-2 font-bold text-slate-100">{o}</button>)}
+            {FREQ_OPTS.map(o => <button key={o} onClick={() => { observe(4,o==='never');return o === 'never' ? powerSystem('TURBINE', 4) : fail(<>اقرئي الدليل: <span className="font-en" dir="ltr">0%</span> تعني…؟ 🔍</>); }} className="font-en rounded-xl border-2 border-slate-300/50 bg-[#1a2450] px-4 py-2 font-bold text-slate-100">{o}</button>)}
           </div>
         </div>
       )}
@@ -166,7 +190,9 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           </div>
           <button onClick={() => {
             const ans = ['She', 'sometimes', 'plays', 'tennis'];
-            if (f5slots.length === 4 && f5slots.every((s, i) => s.toLowerCase() === ans[i].toLowerCase())) powerSystem('CALENDAR', 5);
+            const ok=f5slots.length===4 && f5slots.every((s,i)=>s.toLowerCase()===ans[i].toLowerCase());
+            observe(5,ok);
+            if (ok) powerSystem('CALENDAR', 5);
             else fail(<>الترتيب: <span className="font-en" dir="ltr">Subject → Frequency → Verb</span> 🏗️</>);
           }} className="mt-2 w-full rounded-2xl bg-gradient-to-l from-purple-400 to-fuchsia-400 py-3 font-black text-black">🔥 BUILD IT!</button>
         </div>
@@ -184,7 +210,7 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
           <div className="mx-auto mt-2 max-w-md rounded-xl bg-white/[.06] p-3" dir="ltr"><EnglishLine className="text-white">How often does he play football?</EnglishLine></div>
           <div className="mt-2 flex flex-wrap justify-center gap-2" dir="ltr">
             {['Once a week.', 'Twice a week.', 'Three times a week.'].map(o => (
-              <button key={o} dir="ltr" onClick={() => o.startsWith('Twice') ? powerSystem('SENTENCE', 6, <>مرتين في الأسبوع! ⚽⚽</>) : fail(<>عُدّي كرات القدم في التقويم… كم مرة؟ 🔍</>)} className="font-en rounded-xl border-2 border-white/20 bg-white/5 px-4 py-2 font-bold text-white hover:border-emerald-300">{o}</button>
+              <button key={o} dir="ltr" onClick={() => { observe(6,o.startsWith('Twice')); return o.startsWith('Twice') ? powerSystem('SENTENCE', 6, <>مرتين في الأسبوع! ⚽⚽</>) : fail(<>عُدّي كرات القدم في التقويم… كم مرة؟ 🔍</>); }} className="font-en rounded-xl border-2 border-white/20 bg-white/5 px-4 py-2 font-bold text-white hover:border-emerald-300">{o}</button>
             ))}
           </div>
         </div>
@@ -204,7 +230,9 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
               </div>
               <button onClick={() => {
                 const ans = ['How often', 'does', 'Lina', 'walk', 'in the park', '?'];
-                if (f7q.length === ans.length && f7q.every((s, i) => s.toLowerCase() === ans[i].toLowerCase())) { sfx.success(); setF7phase('a'); setMsg(<>السؤال مثالي! ✨ الآن ابنِ الإجابة… الدليل: <b>most days</b> تعني…؟</>); }
+                const ok=f7q.length===ans.length && f7q.every((s,i)=>s.toLowerCase()===ans[i].toLowerCase());
+                observe(7,ok);
+                if (ok) { nextClock(); sfx.success(); setF7phase('a'); setMsg(<>السؤال مثالي! ✨ الآن ابنِ الإجابة… الدليل: <b>most days</b> تعني…؟</>); }
                 else fail(<>السؤال: <span className="font-en" dir="ltr">How often + does + Lina + walk…?</span> تذكري: بعد DOES فعل أساسي!</>);
               }} className="mt-2 w-full rounded-2xl bg-gradient-to-l from-amber-300 to-orange-400 py-3 font-black text-black">1️⃣ تأكيد السؤال</button>
             </>
@@ -218,10 +246,12 @@ export default function MasterMode({ onWin }: { onWin: () => void }) {
               </div>
               <button onClick={() => {
                 const ans = ['Lina', 'usually', 'walks', 'in the park.'];
-                if (f7a.length === ans.length && f7a.every((s, i) => s.toLowerCase() === ans[i].toLowerCase())) {
+                const ok=f7a.length===ans.length && f7a.every((s,i)=>s.toLowerCase()===ans[i].toLowerCase());
+                observe(8,ok);
+                if (ok) {
                   sfx.core(); setSystems(s => [...s, 'CORE']);
                   setMood('cheer'); setMsg(<>💎 FULL POWER!!! كل الآلة تعمل معًا!!!</>);
-                  setTimeout(() => onWin(), 2300);
+                  setTimeout(() => onWin([...evidence.current]), 2300);
                 } else fail(<>الإجابة: <span className="font-en" dir="ltr">Lina + usually + walks…</span> — معظم الأيام = usually! 💎</>);
               }} className="mt-2 w-full rounded-2xl bg-gradient-to-l from-cyan-300 via-amber-300 to-fuchsia-400 py-3 font-black text-black animate-marquee">💎 FULL POWER — تأكيد الإجابة!</button>
             </>

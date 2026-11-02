@@ -1,3 +1,4 @@
+import { recordBridgeQuestion } from "./bridge";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { SCORED_IDS } from "./data";
 
@@ -70,9 +71,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [s]);
   const set = useCallback((patch: Partial<Save>) => setS((p) => ({ ...p, ...patch })), []);
   const record = useCallback(
-    (qid: string, correct: boolean) =>
-      setS((p) => (qid in p.scored ? p : { ...p, scored: { ...p.scored, [qid]: correct } })),
-    []
+    (qid: string, correct: boolean) => {
+      if (!(qid in s.scored)) recordBridgeQuestion(qid,correct);
+      setS((p) => (qid in p.scored ? p : { ...p, scored: { ...p.scored, [qid]: correct } }));
+    },
+    [s.scored]
   );
   const reset = useCallback(() => setS({ ...DEFAULT, stage: "name" }), []);
   const score = Object.entries(s.scored).filter(([id, ok]) => ok && SCORED_IDS.has(id)).length;

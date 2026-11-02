@@ -149,3 +149,40 @@ export function reportCertificate(score: number, maxScore: number, title: string
   reportCompleted(score, maxScore);
   if (send('certificate', score, maxScore, title)) certified = true;
 }
+
+/** Optional, non-identifying per-question evidence. This never blocks scores or certificates. */
+export type BridgeQuestionEvidence = {question_index:number;correct:boolean;response_ms:number;hint_used:boolean};
+export function reportLearningTrace(chunk:number, items:BridgeQuestionEvidence[]):boolean {
+  if (!student || !Number.isInteger(chunk) || chunk<0 || chunk>4 ||
+      !Array.isArray(items) || items.length===0 || items.length>20 ||
+      items.some(it => !Number.isInteger(it.question_index) || it.question_index<0 ||
+        it.question_index>30 || typeof it.correct!=='boolean' ||
+        typeof it.hint_used!=='boolean' || !Number.isInteger(it.response_ms) ||
+        it.response_ms<0 || it.response_ms>120000)) return false;
+  const payload={source:'schools-bridge-game',activityId:ACTIVITY_ID,type:'learning-trace',chunk,items};
+  const sessionId=sessionIdFromHash();
+  const deliver=():boolean=>{
+    let posted=false;
+    if (sessionChannel && sessionId) {
+      try {sessionChannel.postMessage({...payload,sessionId});posted=true;} catch { /* opener fallback */ }
+    }
+    try {const host=openerWindow();if(host){host.postMessage(payload,HOST_ORIGIN);posted=true;}}
+    catch { /* channel fallback */ }
+    return posted;
+  };
+  const posted=deliver();
+  if(posted){window.setTimeout(deliver,1000);window.setTimeout(deliver,3000);}
+  return posted;
+}
+
+/** New classroom practice round for this verified student; independent of certificate reprints. */
+export function startBridgeReplay(): void {
+  if (!student) return;
+  completed=false;certified=false;
+  const roundId=window.crypto?.randomUUID?.() ||
+    ('r-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+  const message={source:'schools-bridge-game',activityId:ACTIVITY_ID,type:'new-round',round_id:roundId};
+  const sid=sessionIdFromHash();
+  try {if(sessionChannel && sid)sessionChannel.postMessage({...message,sessionId:sid});} catch {}
+  try {openerWindow()?.postMessage(message,HOST_ORIGIN);}catch {}
+}
