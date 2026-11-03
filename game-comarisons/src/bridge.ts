@@ -26,7 +26,7 @@ export const BRIDGE_ORIGIN = "https://jisr-almadaris.github.io";
 export const BRIDGE_SOURCE = "schools-bridge-game";
 export const ACTIVITY_ID = "game-comparisons";
 /** Deploy marker — lets ops verify which sender build is live. */
-export const SENDER_VERSION = "2";
+export const SENDER_VERSION = "4";
 
 export type BridgeStatus = "sent" | "no-bridge" | "error";
 
@@ -99,50 +99,90 @@ function bridgeTargets(): Window[] {
   return wins;
 }
 
-function post(message: CompletedMessage | CertificateMessage | LearningTraceMessage): BridgeStatus {
-  const targets = bridgeTargets();
-  // The Bridge and games share one origin on GitHub Pages. A session-bound
-  // channel still works if the browser drops window.opener (some mobile tabs).
-  let channelDelivered = false;
-  const sessionId = (() => { try { return new URLSearchParams(location.hash.replace(/^#/, '')).get('sb_session'); } catch { return null; } })();
-  if (identityChannel && sessionId && bridgeIdentity) {
-    try { identityChannel.postMessage({ ...message, sessionId }); channelDelivered = true; }
-    catch { /* use opener where possible */ }
+// Reliable game-to-gateway delivery: the gateway acknowledges only after its
+// backend confirms storage. Retry the same delivery id (never a fresh score).
+// sessionStorage survives a page refresh in the SAME game tab; the gateway
+// independently keeps a durable pending queue when it accepts the message.
+const OUTBOX_PREFIX = 'jisr-comparisons-pending-v2::';
+const waiting = new Map<string, { packet: any; visitorId: string; timer: number | null }>();
+const id = () => {
+  try { return crypto.randomUUID(); }
+  catch { return 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
+};
+function saveOutbox(): void {
+  // Separate keys avoid overwriting a second tab's unreconciled result.
+  try {
+    for (const [key, entry] of waiting) localStorage.setItem(OUTBOX_PREFIX + key,
+      JSON.stringify({ key, packet: entry.packet, visitorId: entry.visitorId }));
+  } catch { /* in-memory outbox still works if storage is unavailable */ }
+}
+function sendPacket(packet: any): boolean {
+  let dispatched = false;
+  const wins = bridgeTargets();
+  const sessionId = (() => {
+    try { return new URLSearchParams(location.hash.replace(/^#/, '')).get('sb_session'); }
+    catch { return null; }
+  })();
+  if (identityChannel && sessionId) {
+    try { identityChannel.postMessage({ ...packet, sessionId }); dispatched = true; }
+    catch { /* use opener instead */ }
   }
-  // A typed name in an unverified standalone window must NEVER be reported
-  // as a result for the pupil who happened to be in the bridge earlier.
-  if (!bridgeIdentity || (targets.length === 0 && !channelDelivered)) {
-    // Honest limitation, console-only (never shown to the student): the game
-    // was not launched from the Jisr Almadaris site, or the opener tab was
-    // closed, so there is no window to report to.
-    console.warn(
-      `[${BRIDGE_SOURCE} v${SENDER_VERSION}] No window.opener/parent — "${message.type}" for ` +
-        `"${ACTIVITY_ID}" cannot reach the Teacher Control Center. ` +
-        `The receiver also requires the ORIGINAL Jisr tab to still hold this ` +
-        `attempt in memory. Payload (kept local):`,
-      message.type === 'learning-trace' ? `[${message.items.length} anonymized question events]` : JSON.stringify(message)
-    );
-    return "no-bridge";
+  for (const win of wins) {
+    try { win.postMessage(packet, BRIDGE_ORIGIN); dispatched = true; }
+    catch { /* retry while page remains open */ }
   }
-  let delivered = channelDelivered;
-  for (const w of targets) {
-    try {
-      // Explicit target origin — never "*" — so the score can only be
-      // delivered to the Jisr Almadaris origin the receiver runs on.
-      w.postMessage(message, BRIDGE_ORIGIN);
-      delivered = true;
-    } catch (err) {
-      console.warn(`[${BRIDGE_SOURCE} v${SENDER_VERSION}] postMessage failed:`, err);
+  return dispatched;
+}
+function retryDelivery(key: string): void {
+  const entry = waiting.get(key);
+  if (!entry || !bridgeIdentity || bridgeIdentity.visitorId !== entry.visitorId) return;
+  sendPacket(entry.packet);
+}
+function rememberPacket(packet: any): void {
+  if (!bridgeIdentity) return;
+  const key = packet.delivery_id;
+  const entry = { packet, visitorId: bridgeIdentity.visitorId, timer: null as number | null };
+  waiting.set(key, entry);
+  saveOutbox();
+  entry.timer = window.setInterval(() => retryDelivery(key), 3000);
+}
+function acceptSavedReceipt(data: any): void {
+  if (!data || data.source !== 'schools-bridge-host' || data.type !== 'saved' ||
+      data.activityId !== ACTIVITY_ID || typeof data.delivery_id !== 'string') return;
+  const entry = waiting.get(data.delivery_id);
+  if (!entry || entry.visitorId !== bridgeIdentity?.visitorId) return;
+  if (entry.timer !== null) window.clearInterval(entry.timer);
+  waiting.delete(data.delivery_id);
+  try { localStorage.removeItem(OUTBOX_PREFIX + data.delivery_id); } catch {}
+  saveOutbox();
+  console.info('[schools-bridge-game] Server confirmed saved:', ACTIVITY_ID, data.delivery_id);
+}
+function restoreOutbox(): void {
+  if (!bridgeIdentity) return;
+  let old: any[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(OUTBOX_PREFIX)) old.push(JSON.parse(localStorage.getItem(key) || 'null'));
     }
+  } catch { /* storage unavailable */ }
+  for (const entry of old.slice(0, 70)) {
+    if (!entry || entry.visitorId !== bridgeIdentity.visitorId ||
+        !entry.packet || typeof entry.key !== 'string' ||
+        entry.packet.delivery_id !== entry.key || waiting.has(entry.key)) continue;
+    rememberPacket(entry.packet);
+    retryDelivery(entry.key);
   }
-  if (delivered) {
-    console.info(
-      `[${BRIDGE_SOURCE} v${SENDER_VERSION}] Dispatched "${message.type}" for "${ACTIVITY_ID}" → ${BRIDGE_ORIGIN}:`,
-      message.type === 'learning-trace' ? `[${message.items.length} anonymized question events]` : JSON.stringify(message)
-    );
-    return "sent";
-  }
-  return "error";
+}
+function post(message: CompletedMessage | CertificateMessage | LearningTraceMessage): BridgeStatus {
+  if (!bridgeIdentity) return 'no-bridge';
+  const packet = { ...message, delivery_id: id() };
+  const dispatched = sendPacket(packet);
+  // Never interpret dispatch as a server save. Keep retrying until the host
+  // confirms a database write (or a safe duplicate event).
+  rememberPacket(packet);
+  if (!dispatched) console.warn('[schools-bridge-game] Save pending: gateway temporarily unreachable.');
+  return dispatched ? 'sent' : 'no-bridge';
 }
 
 /* Idempotence guards: one genuine completion/certificate per finished run.
@@ -198,6 +238,14 @@ export function reportCertificate(score: number, maxScore: number, title?: strin
   return status;
 }
 
+// Acknowledgements cannot originate from a different website or tab.
+window.addEventListener('message', event => {
+  let validSource = Boolean(openerAtLoad && event.source === openerAtLoad);
+  try { validSource = validSource || (window.parent !== window && event.source === window.parent); }
+  catch { /* ignore */ }
+  if (event.origin === BRIDGE_ORIGIN && validSource) acceptSavedReceipt(event.data);
+});
+
 /* Startup diagnostic (console-only): makes the live build and launch context
    verifiable from DevTools during a production test. */
 try {
@@ -233,8 +281,11 @@ export function prepareBridgeSession(): Promise<void> {
     catch { identityChannel = null; }
   }
   if (!host && !identityChannel) {
-    // A standalone visit uses an isolated ephemeral local progress key.
-    return Promise.resolve();
+    // Never let a standalone game issue a certificate which cannot reach the
+    // teacher. Games must be launched from a verified Jisr pupil session.
+    const root = document.getElementById('root');
+    if (root) root.innerHTML = '<p dir="rtl" style="padding:2rem;text-align:center">افتحي اللعبة من بوابة جسر المدارس بعد تسجيل اسمك ومدرستك، حتى تُحفظ نتيجتك في لوحة المعلمة.</p>';
+    return new Promise<void>(() => {}); // no App mount without verified identity
   }
   return new Promise(resolve => {
     let settled = false;
@@ -256,13 +307,17 @@ export function prepareBridgeSession(): Promise<void> {
       const visitorId = typeof d.visitor_id === 'string' && d.visitor_id.startsWith('v-')
         ? d.visitor_id : JSON.stringify([normalized(name), normalized(school)]);
       bridgeIdentity = { name, school, visitorId };
+      restoreOutbox();
       done();
     };
     const receive = (event: MessageEvent) => {
       if (event.origin === BRIDGE_ORIGIN && event.source === host) accept(event.data);
     };
     window.addEventListener('message', receive);
-    if (identityChannel) identityChannel.onmessage = event => accept(event.data);
+    if (identityChannel) identityChannel.onmessage = event => {
+      accept(event.data);
+      acceptSavedReceipt(event.data);
+    };
     timer = window.setTimeout(() => {
       // A bridge-launched game must not run if identity verification fails.
       const root = document.getElementById('root');

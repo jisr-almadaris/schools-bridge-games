@@ -48,19 +48,65 @@
       send('learning-trace',{chunk,items:answerEvidence.slice(offset,offset+20)});
     }
   }
-  function send(type, values) {
-    const message = {
-      source: "schools-bridge-game", activityId, type,
-      ...(sessionId ? { sessionId } : {}),
-      ...(values || {})
-    };
+  // Keep each answer/result/certificate until the gateway confirms a DB write.
+  const outboxPrefix = 'jisr-vocab-pending-v2::' + activityId + '::';
+  const pending = new Map();
+  const ownerKey = () => window.JisrBridgeIdentity
+    ? JSON.stringify([window.JisrBridgeIdentity.name, window.JisrBridgeIdentity.school]) : '';
+  const deliveryId = () => window.crypto?.randomUUID?.() ||
+    ('ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+  function transmit(message) {
     try { if (channel) channel.postMessage(message); } catch (_) {}
+    try { if (window.opener && !window.opener.closed) window.opener.postMessage(message, bridgeOrigin); }
+    catch (_) {}
+  }
+  function resend(key) {
+    const entry = pending.get(key);
+    if (entry && entry.studentKey === ownerKey()) transmit(entry.message);
+  }
+  function retain(message, studentKey) {
+    const key = outboxPrefix + message.delivery_id;
+    if (pending.has(key)) return;
+    try {localStorage.setItem(key, JSON.stringify({message, studentKey}));} catch (_) {}
+    const timer = window.setInterval(() => resend(key), 3000);
+    pending.set(key, {message, studentKey, timer});
+    resend(key);
+  }
+  function restoreOutbox() {
     try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage(message, bridgeOrigin);
+      const keys = [];
+      for (let i=0;i<localStorage.length;i++) {
+        const key=localStorage.key(i);
+        if(key && key.startsWith(outboxPrefix))keys.push(key);
+      }
+      for(const key of keys.slice(0,70)) {
+        const entry = JSON.parse(localStorage.getItem(key) || 'null');
+        if (entry?.message?.delivery_id && entry.studentKey === ownerKey()) retain(entry.message, entry.studentKey);
       }
     } catch (_) {}
   }
+  function saved(data) {
+    if (!data || data.source !== 'schools-bridge-host' || data.type !== 'saved' ||
+        data.activityId !== activityId || typeof data.delivery_id !== 'string') return;
+    const key=outboxPrefix + data.delivery_id;
+    const entry=pending.get(key);
+    if(!entry || entry.studentKey !== ownerKey())return;
+    window.clearInterval(entry.timer);
+    pending.delete(key);
+    try {localStorage.removeItem(key);} catch (_) {}
+  }
+  function send(type, values) {
+    const message = {
+      source: 'schools-bridge-game', activityId, type,
+      ...(sessionId ? { sessionId } : {}), ...(values || {})
+    };
+    if (['completed', 'certificate', 'learning-trace'].includes(type)) {
+      if (!window.JisrBridgeIdentity) return;
+      message.delivery_id = deliveryId();
+      retain(message, ownerKey());
+    } else transmit(message);
+  }
+  window.addEventListener('online', () => {for (const key of pending.keys()) resend(key);});
   const reporter = {
     beginRound,
     recordAnswer,
@@ -87,6 +133,7 @@
           d.activityId === activityId && d.sessionId === sessionId) {
         acceptBridgeIdentity(d);
       }
+      saved(d);
     };
   }
   window.addEventListener("message", event => {
@@ -96,6 +143,10 @@
         !d || d.source !== "schools-bridge-host" || d.type !== "identity" ||
         d.activityId !== activityId || (sessionId && d.sessionId !== sessionId)) return;
     acceptBridgeIdentity(d);
+  });
+  window.addEventListener("message", event => {
+    if (event.origin === bridgeOrigin &&
+        (event.source === window.opener || (window.parent !== window && event.source === window.parent))) saved(event.data);
   });
   // The original React bundle is inert until the current pupil is verified.
   // This keeps old localStorage state from rendering in the wrong pupil's tab.
@@ -115,8 +166,9 @@
   }
   function acceptBridgeIdentity(d) {
     if (!d || typeof d.name !== "string" || typeof d.school !== "string" ||
-        !d.name.trim() || !d.school.trim()) return;
+        d.name.trim().split(/\s+/).length < 3 || !d.school.trim()) return;
     window.JisrBridgeIdentity = {name: d.name.trim(), school: d.school.trim()};
+    restoreOutbox();
     // A browser can keep several student sessions open: they must not share
     // the same localStorage name key, even for the same vocabulary game.
     window.__SB_VOCAB_NAME_KEY = "sb_vocab_name::" + activityId + "::" +
@@ -128,9 +180,8 @@
   document.addEventListener("DOMContentLoaded", () => {
     if (window.JisrBridgeIdentity) startBundle();
     else if (!openedFromBridge) {
-      window.__SB_VOCAB_NAME_KEY = "sb_vocab_name_standalone::" + activityId;
-      try { localStorage.removeItem(window.__SB_VOCAB_NAME_KEY); } catch (_) {}
-      startBundle();
+      const label=document.getElementById('sb-vocab-loading');
+      if (label) label.textContent='افتحي اللعبة من بوابة الجسر بعد كتابة الاسم الثلاثي واختيار المدرسة حتى تُحفظ نتيجتك.';
     } else {
       // Never display the last pupil's name if the identity handshake fails.
       window.setTimeout(() => {

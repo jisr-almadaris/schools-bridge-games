@@ -43,7 +43,9 @@ export function prepareBridgeSession(): Promise<void> {
       localStorage.removeItem(OWNER_KEY);
     } catch { /* storage disabled */ }
     forgetOldProgress();
-    return Promise.resolve();
+    const root=document.getElementById('root');
+    if(root) root.innerHTML='<p dir="rtl" style="padding:2rem;text-align:center">افتحي اللعبة من بوابة الجسر وسجلي اسمك الثلاثي ومدرستك أولًا، حتى تُحفظ نتيجتك.</p>';
+    return new Promise<void>(()=>{});
   }
   return new Promise(resolve => {
     let settled = false;
@@ -59,7 +61,7 @@ export function prepareBridgeSession(): Promise<void> {
           d.type !== 'identity' || d.activityId !== ACTIVITY_ID) return;
       if (sessionChannel && d.sessionId !== sessionId) return;
       if (typeof d.name !== 'string' || typeof d.school !== 'string' ||
-          !d.name.trim() || !d.school.trim()) return;
+          d.name.trim().split(/\s+/).length < 3 || !d.school.trim()) return;
       const key = typeof d.visitor_id === 'string' && d.visitor_id.startsWith('v-')
         ? 'id:' + d.visitor_id : JSON.stringify([norm(d.name), norm(d.school)]);
       try {
@@ -91,13 +93,14 @@ export function prepareBridgeSession(): Promise<void> {
         }
       } catch { forgetOldProgress(); }
       student = { name: d.name.trim(), school: d.school.trim() };
+      restorePendingPackets();
       finish();
     };
     const receive = (event: MessageEvent) => {
       if (event.origin !== HOST_ORIGIN || event.source !== host) return;
       accept(event.data);
     };
-    if (sessionChannel) sessionChannel.onmessage = event => accept(event.data);
+    if (sessionChannel) sessionChannel.onmessage = event => { accept(event.data); acceptSavedPacket(event.data); };
     window.addEventListener('message', receive);
     const timer = window.setTimeout(() => {
       // Fail closed on an unverified bridge launch; this session must not
@@ -115,27 +118,85 @@ export function prepareBridgeSession(): Promise<void> {
       activityId: ACTIVITY_ID, sessionId }); } catch { /* opener fallback */ }
   });
 }
+
+/* Persistent, per-student delivery until the gateway confirms database save.
+ * A postMessage alone never proves a score reached the teacher. */
+const PENDING_PREFIX = 'jisr-result-pending-v2::' + ACTIVITY_ID + '::';
+const pendingPackets = new Map<string, {packet: any; studentKey: string; timer: number}>();
+const ownerDeliveryKey = () => student ? JSON.stringify([norm(student.name),norm(student.school)]) : '';
+const freshDeliveryId = () => window.crypto?.randomUUID?.() ||
+  ('ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+function transmitSavedPacket(packet: any): boolean {
+  let sent = false;
+  const sid = sessionIdFromHash();
+  if (sessionChannel && sid) {
+    try {sessionChannel.postMessage({...packet,sessionId:sid});sent=true;} catch {}
+  }
+  try { const host=openerWindow(); if(host){host.postMessage(packet,HOST_ORIGIN);sent=true;} } catch {}
+  return sent;
+}
+function retryPendingPacket(key: string): void {
+  const item = pendingPackets.get(key);
+  if (!item || item.studentKey !== ownerDeliveryKey()) return;
+  transmitSavedPacket(item.packet);
+}
+function rememberPendingPacket(packet:any, studentKey:string):void {
+  const key=PENDING_PREFIX+packet.delivery_id;
+  if(pendingPackets.has(key))return;
+  try {localStorage.setItem(key,JSON.stringify({packet,studentKey}));} catch {}
+  const timer=window.setInterval(()=>retryPendingPacket(key),3000);
+  pendingPackets.set(key,{packet,studentKey,timer});
+  retryPendingPacket(key);
+}
+function sendReliablePacket(packet:any):boolean {
+  if(!student)return false;
+  const full={...packet,delivery_id:freshDeliveryId()};
+  const studentKey=ownerDeliveryKey();
+  rememberPendingPacket(full,studentKey);
+  return true; // queued locally, not a claim that the server saved anything
+}
+function acceptSavedPacket(data:any):void {
+  if(!data || data.source!=='schools-bridge-host' || data.type!=='saved' ||
+     data.activityId!==ACTIVITY_ID || typeof data.delivery_id!=='string')return;
+  const key=PENDING_PREFIX+data.delivery_id;
+  const entry=pendingPackets.get(key);
+  if(!entry || entry.studentKey!==ownerDeliveryKey())return;
+  clearInterval(entry.timer);
+  pendingPackets.delete(key);
+  try{localStorage.removeItem(key);}catch{}
+}
+function restorePendingPackets():void {
+  if(!student)return;
+  try{
+    const keys=[] as string[];
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k?.startsWith(PENDING_PREFIX))keys.push(k);
+    }
+    for(const key of keys.slice(0,70)){
+      const data=JSON.parse(localStorage.getItem(key)||'null');
+      if(data?.packet?.delivery_id && data.studentKey===ownerDeliveryKey())
+        rememberPendingPacket(data.packet,data.studentKey);
+    }
+  }catch{}
+}
+window.addEventListener('message',(event:MessageEvent)=>{
+  if(event.origin===HOST_ORIGIN && event.source===openerWindow()) acceptSavedPacket(event.data);
+});
+window.addEventListener('online',()=>{for(const key of pendingPackets.keys())retryPendingPacket(key);});
+
 export function bridgeStudentName(): string { return student?.name || ''; }
 function send(type: 'completed' | 'certificate', score: number, maxScore: number, title?: string): boolean {
-  if (!student) return false; // typing a name in the game never counts as gateway registration
-  const scoreValue = Number(score), maxValue = Number(maxScore);
-  if (!Number.isFinite(scoreValue) || !Number.isFinite(maxValue) ||
-      maxValue <= 0 || scoreValue < 0 || scoreValue > maxValue) return false;
-  const payload: Record<string, unknown> = {
-    source: 'schools-bridge-game', activityId: ACTIVITY_ID, type,
-    score: type === 'certificate' ? Math.round(scoreValue / maxValue * 100) : scoreValue,
+  if (!student) return false;
+  const value=Number(score), max=Number(maxScore);
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max<=0 || value<0 || value>max) return false;
+  const payload: Record<string,unknown>={
+    source:'schools-bridge-game',activityId:ACTIVITY_ID,type,
+    score:type==='certificate'?Math.round(value/max*100):value
   };
-  if (type === 'completed') payload.maxScore = maxValue;
-  if (type === 'certificate' && title) payload.title = title;
-  // Prefer a session-bound channel: both pages are github.io, and the host
-  // already holds the matching unguessable per-launch session token.
-  if (sessionChannel && sessionIdFromHash()) {
-    try { sessionChannel.postMessage({ ...payload, sessionId: sessionIdFromHash() }); return true; }
-    catch { /* use window messaging */ }
-  }
-  try { const host = openerWindow(); if (host) { host.postMessage(payload, HOST_ORIGIN); return true; } }
-  catch { /* disconnected */ }
-  return false;
+  if(type==='completed')payload.maxScore=max;
+  if(type==='certificate' && title)payload.title=title;
+  return sendReliablePacket(payload);
 }
 function sessionIdFromHash(): string | null {
   try { return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('sb_session'); }
@@ -160,19 +221,7 @@ export function reportLearningTrace(chunk:number, items:BridgeQuestionEvidence[]
         typeof it.hint_used!=='boolean' || !Number.isInteger(it.response_ms) ||
         it.response_ms<0 || it.response_ms>120000)) return false;
   const payload={source:'schools-bridge-game',activityId:ACTIVITY_ID,type:'learning-trace',chunk,items};
-  const sessionId=sessionIdFromHash();
-  const deliver=():boolean=>{
-    let posted=false;
-    if (sessionChannel && sessionId) {
-      try {sessionChannel.postMessage({...payload,sessionId});posted=true;} catch { /* opener fallback */ }
-    }
-    try {const host=openerWindow();if(host){host.postMessage(payload,HOST_ORIGIN);posted=true;}}
-    catch { /* channel fallback */ }
-    return posted;
-  };
-  const posted=deliver();
-  if(posted){window.setTimeout(deliver,1000);window.setTimeout(deliver,3000);}
-  return posted;
+  return sendReliablePacket(payload);
 }
 
 /** New classroom practice round for this verified student; independent of certificate reprints. */
